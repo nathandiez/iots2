@@ -12,6 +12,6 @@ kubectl rollout restart deployment/iot-service
 
 
 # Create tunnel from kubernetes minikube cluster to local mac.  Create new ssh and leave it open
-ssh -L 32561:192.168.49.2:32561 -L 31734:192.168.49.2:31734 eric@debianhp.local
+ssh -L 32561:192.168.49.2:32561 -L 31734:192.168.49.2:31734 nathan@kma
 
 http://localhost:32561 to render in browser on mac
