@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "iot-system.labels" . | nindent 4 }}
+    app: web-frontend
+spec:
+  replicas: {{ .Values.webFrontend.replicas }}
+  selector:
+    matchLabels:
+      app: web-frontend
+  template:
+    metadata:
+      labels:
+        app: web-frontend
+        {{- include "iot-system.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.webFrontend.securityContext.runAsUser }}
+        fsGroup: 2000
+      containers:
+      - name: web-frontend
+        image: "{{ .Values.webFrontend.image.repository }}:{{ .Values.webFrontend.image.tag }}"
+        imagePullPolicy: {{ .Values.webFrontend.image.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: {{ .Values.webFrontend.securityContext.runAsUser }}
+        ports:
+        - containerPort: {{ .Values.webFrontend.port }}
+        env:
+        - name: REACT_APP_API_URL
+          value: "http://web-backend:{{ .Values.webBackend.port }}"
+        resources:
+          {{- toYaml .Values.webFrontend.resources | nindent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "iot-system.labels" . | nindent 4 }}
+    app: web-frontend
+spec:
+  selector:
+    app: web-frontend
+  ports:
+    - protocol: TCP
+      port: {{ .Values.webFrontend.service.port }}
+      targetPort: {{ .Values.webFrontend.port }}
+  type: {{ .Values.webFrontend.service.type }}

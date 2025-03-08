@@ -1,0 +1,14 @@
+# Kubernetes binaries
+kubectl
+minikube-linux-amd64
+
+# Certificate files
+*.crt
+*.key
+*.csr
+*.pem
+*.srl
+
+# Other sensitive files
+.env
+secrets/

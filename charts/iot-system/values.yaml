@@ -1,0 +1,129 @@
+# Global configurations
+namespace: iot-system
+
+# Certificate configurations
+certificates:
+  mosquitto:
+    enabled: true
+    secretName: mosquitto-certs
+
+# Service account configuration
+serviceAccount:
+  name: iot-service-account
+  create: true
+
+# MQTT broker (Mosquitto) configuration
+mosquitto:
+  image:
+    repository: eclipse-mosquitto
+    tag: latest
+    pullPolicy: IfNotPresent
+  ports:
+    - name: mqtt
+      port: 1883
+    - name: mqtts
+      port: 8883
+  config:
+    allowAnonymous: true
+    useTLS: true
+  securityContext:
+    runAsUser: 1000
+    runAsNonRoot: true
+  resources:
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# IoT Service configuration
+iotService:
+  image:
+    repository: nathandiez12/iot-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  securityContext:
+    runAsUser: 1000
+    runAsNonRoot: true
+  resources:
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  port: 5000
+
+# Test publisher configuration
+testPub:
+  image:
+    repository: nathandiez12/test-pub
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  securityContext:
+    runAsUser: 1000
+    runAsNonRoot: true
+  resources:
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+# TimescaleDB configuration
+timescaledb:
+  image:
+    repository: timescale/timescaledb
+    tag: latest-pg14
+    pullPolicy: IfNotPresent
+  securityContext:
+    runAsUser: 70
+    runAsNonRoot: true
+  persistence:
+    enabled: false
+    size: 1Gi
+  resources:
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  port: 5432
+  database:
+    name: iotdb
+    user: iotuser
+    password: iotpass  # Consider using a more secure password in production
+
+# Web Backend configuration
+webBackend:
+  image:
+    repository: nathandiez12/web-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  securityContext:
+    runAsUser: 1000
+    runAsNonRoot: true
+  resources:
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  port: 5000
+  service:
+    type: NodePort
+
+# Web Frontend configuration
+webFrontend:
+  image:
+    repository: nathandiez12/web-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  securityContext:
+    runAsUser: 1000
+    runAsNonRoot: true
+  resources:
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  port: 3000
+  service:
+    type: NodePort
+    port: 3000
+
+# Network policy settings
+networkPolicy:
+  enabled: true

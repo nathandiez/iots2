@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosquitto
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mosquitto
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+    spec:
+      serviceAccountName: iot-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      containers:
+      - name: mosquitto
+        image: eclipse-mosquitto:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        ports:
+        - containerPort: 1883
+        - containerPort: 8883  # Added TLS port
+        volumeMounts:
+        - name: mosquitto-config
+          mountPath: /mosquitto/config
+        - name: mosquitto-certs  # Added certificate mount
+          mountPath: /mosquitto/certs
+          readOnly: true
+      volumes:
+      - name: mosquitto-config
+        configMap:
+          name: mosquitto-config
+      - name: mosquitto-certs  # Added certificate volume
+        secret:
+          secretName: mosquitto-certs
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+data:
+  mosquitto.conf: |
+    # Standard MQTT port without TLS
+    listener 1883
+    allow_anonymous true
+    
+    # Secure MQTT port with TLS
+    listener 8883
+    cafile /mosquitto/certs/ca.crt
+    certfile /mosquitto/certs/server.crt
+    keyfile /mosquitto/certs/server.key
+    tls_version tlsv1.2
+    require_certificate false
+    allow_anonymous true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+spec:
+  selector:
+    app: mosquitto
+  ports:
+    - name: mqtt  # Added name for clarity
+      protocol: TCP
+      port: 1883
+      targetPort: 1883
+    - name: mqtts  # Added secure port
+      protocol: TCP
+      port: 8883
+      targetPort: 8883

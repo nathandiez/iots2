@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "iot-system.labels" . | nindent 4 }}
+    app: iot-service
+spec:
+  replicas: {{ .Values.iotService.replicas }}
+  selector:
+    matchLabels:
+      app: iot-service
+  template:
+    metadata:
+      labels:
+        app: iot-service
+        {{- include "iot-system.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.iotService.securityContext.runAsUser }}
+        fsGroup: 2000
+      containers:
+      - name: iot-service
+        image: "{{ .Values.iotService.image.repository }}:{{ .Values.iotService.image.tag }}"
+        imagePullPolicy: {{ .Values.iotService.image.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: {{ .Values.iotService.securityContext.runAsUser }}
+        env:
+        - name: MQTT_BROKER
+          value: mosquitto
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_HOST
+          value: timescaledb
+        - name: POSTGRES_PORT
+          value: "{{ .Values.timescaledb.port }}"
+        {{- if .Values.certificates.mosquitto.enabled }}
+        volumeMounts:
+        - name: mosquitto-certs
+          mountPath: /mosquitto/certs
+          readOnly: true
+        {{- end }}
+        resources:
+          {{- toYaml .Values.iotService.resources | nindent 10 }}
+      {{- if .Values.certificates.mosquitto.enabled }}
+      volumes:
+      - name: mosquitto-certs
+        secret:
+          secretName: {{ .Values.certificates.mosquitto.secretName }}
+      {{- end }}

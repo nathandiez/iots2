@@ -1,0 +1,28 @@
+server:
+  service:
+    type: NodePort
+  persistentVolume:
+    enabled: true
+    size: 10Gi
+  # Remove the configMapOverrideName completely and use built-in config
+  config:
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      - job_name: 'iot-service'
+        kubernetes_sd_configs:
+          - role: service
+            namespaces:
+              names:
+                - iot-system
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_label_prometheus]
+            regex: "true"
+            action: keep
+          - source_labels: [__meta_kubernetes_service_port_name]
+            regex: "metrics"
+            action: keep

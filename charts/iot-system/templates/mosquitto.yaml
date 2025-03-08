@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosquitto
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "iot-system.labels" . | nindent 4 }}
+    app: mosquitto
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mosquitto
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+        {{- include "iot-system.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.mosquitto.securityContext.runAsUser }}
+        fsGroup: 2000
+      containers:
+      - name: mosquitto
+        image: "{{ .Values.mosquitto.image.repository }}:{{ .Values.mosquitto.image.tag }}"
+        imagePullPolicy: {{ .Values.mosquitto.image.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: {{ .Values.mosquitto.securityContext.runAsUser }}
+        ports:
+        {{- range .Values.mosquitto.ports }}
+        - containerPort: {{ .port }}
+          name: {{ .name }}
+        {{- end }}
+        volumeMounts:
+        - name: mosquitto-config
+          mountPath: /mosquitto/config
+        {{- if .Values.certificates.mosquitto.enabled }}
+        - name: mosquitto-certs
+          mountPath: /mosquitto/certs
+          readOnly: true
+        {{- end }}
+        resources:
+          {{- toYaml .Values.mosquitto.resources | nindent 10 }}
+      volumes:
+      - name: mosquitto-config
+        configMap:
+          name: mosquitto-config
+      {{- if .Values.certificates.mosquitto.enabled }}
+      - name: mosquitto-certs
+        secret:
+          secretName: {{ .Values.certificates.mosquitto.secretName }}
+      {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "iot-system.labels" . | nindent 4 }}
+data:
+  mosquitto.conf: |
+    # Standard MQTT port without TLS
+    listener 1883
+    allow_anonymous {{ .Values.mosquitto.config.allowAnonymous }}
+    
+    {{- if .Values.mosquitto.config.useTLS }}
+    # Secure MQTT port with TLS
+    listener 8883
+    cafile /mosquitto/certs/ca.crt
+    certfile /mosquitto/certs/server.crt
+    keyfile /mosquitto/certs/server.key
+    tls_version tlsv1.2
+    require_certificate false
+    allow_anonymous {{ .Values.mosquitto.config.allowAnonymous }}
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "iot-system.labels" . | nindent 4 }}
+    app: mosquitto
+spec:
+  selector:
+    app: mosquitto
+  ports:
+  {{- range .Values.mosquitto.ports }}
+    - name: {{ .name }}
+      protocol: TCP
+      port: {{ .port }}
+      targetPort: {{ .port }}
+  {{- end }}
+
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mosquitto-policy
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "iot-system.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: mosquitto
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: iot-service
+    - podSelector:
+        matchLabels:
+          app: test-pub
+    ports:
+    - protocol: TCP
+      port: 1883
+    - protocol: TCP
+      port: 8883
+{{- end }}

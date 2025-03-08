@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-service
+  namespace: iot-system
+spec:
+  template:
+    spec:
+      containers:
+      - name: iot-service
+        ports:
+        - containerPort: 8000
+          name: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iot-service-metrics
+  namespace: iot-system
+  labels:
+    app: iot-service
+    # This label is important for Prometheus service discovery
+    prometheus: "true"
+spec:
+  selector:
+    app: iot-service
+  ports:
+  - name: metrics
+    port: 8000
+    targetPort: 8000
