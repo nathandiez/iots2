@@ -24,8 +24,18 @@ mosquitto:
     - name: mqtts
       port: 8883
   config:
-    allowAnonymous: true
+    allowAnonymous: false
     useTLS: true
+    useAuth: true
+  auth:
+    secretName: mosquitto-auth
+  credentials:
+    iotService:
+      username: iot_service
+      password: secure_iot_password
+    testPub:
+      username: test_pub
+      password: test_password
   securityContext:
     runAsUser: 1000
     runAsNonRoot: true
