@@ -92,10 +92,8 @@ timescaledb:
       memory: "512Mi"
       cpu: "500m"
   port: 5432
-  database:
-    name: iotdb
-    user: iotuser
-    password: iotpass  # Consider using a more secure password in production
+  # Database credentials are now managed via external Kubernetes Secret
+  # and no longer stored in this file
 
 # Web Backend configuration
 webBackend:
