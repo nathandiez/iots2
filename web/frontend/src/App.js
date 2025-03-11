@@ -15,7 +15,7 @@ function App() {
   const [selectedDevice, setSelectedDevice] = useState('');
   const [sensorData, setSensorData] = useState([]);
   const [hours, setHours] = useState(24);
-  const apiUrl = 'http://localhost:30145';    /* Use tunneled port */
+  const apiUrl = '';  // Empty string for relative URLs
 
   useEffect(() => {
     fetch(`${apiUrl}/api/devices`)
