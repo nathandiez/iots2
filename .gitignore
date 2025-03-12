@@ -12,3 +12,4 @@ minikube-linux-amd64
 # Other sensitive files
 .env
 secrets/
+*passwd

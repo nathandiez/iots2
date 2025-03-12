@@ -231,6 +231,20 @@ This phase uses your provided `rebuild.sh` script (located in `~/projects/iots2`
      --from-file=server.key=./certs/server.key \
      -n iot-system
    ```
+# this worked!
+# Create a new password file with both users
+touch mosquitto_passwd
+mosquitto_passwd -c mosquitto_passwd iot_service
+# Enter "na123" when prompted
+
+# Add the second user (likely for test-pub)
+mosquitto_passwd -b mosquitto_passwd test_pub na123
+# This adds the user 'test_pub' with password 'na123' non-interactively
+
+# Update the secret
+kubectl delete secret mosquitto-passwd -n iot-system
+kubectl create secret generic mosquitto-passwd --from-file=mosquitto_passwd -n iot-system
+
 
 > **Docker Login Reminder:**  
 > If your Docker images reside in a private Docker Hub repository, ensure you are logged in on your local build machine using:
