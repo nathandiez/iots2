@@ -24,16 +24,16 @@ if [ "$FORCE_PULL" = true ]; then
   echo "==> Force pull flag detected. Pulling latest Docker images..."
   
   echo "==> Pulling web-frontend image..."
-  docker pull raraid/web-frontend:latest
+  docker pull nathandiez12/web-frontend:latest
   
   echo "==> Pulling web-backend image..."
-  docker pull raraid/web-backend:latest
+  docker pull nathandiez12/web-backend:latest
   
   echo "==> Pulling iot-service image..."
-  docker pull raraid/iot-service:latest
+  docker pull nathandiez12/iot-service:latest
   
   echo "==> Pulling test-pub image..."
-  docker pull raraid/test-pub:latest
+  docker pull nathandiez12/test-pub:latest
   
   echo "==> Pulling mosquitto image..."
   docker pull eclipse-mosquitto:latest
@@ -56,15 +56,25 @@ kubectl delete namespace iot-system --ignore-not-found
 echo "==> Recreating namespace 'iot-system'..."
 kubectl create namespace iot-system
 
+echo "==> Creating mosquitto password secret..."
+# Check if the secret already exists
+if kubectl get secret mosquitto-passwd -n iot-system >/dev/null 2>&1; then
+  echo "Secret 'mosquitto-passwd' already exists, skipping creation"
+else
+  # Create the secret from the password file
+  kubectl create secret generic mosquitto-passwd --from-file=mosquitto_passwd -n iot-system
+  echo "Secret 'mosquitto-passwd' created"
+fi
+
 echo "==> Setting current context to 'iot-system'..."
 kubectl config set-context --current --namespace=iot-system
 
 echo "==> Creating 'db-credentials' secret..."
-kubectl create secret generic db-credentials \
-  --namespace=iot-system \
-  --from-literal=POSTGRES_DB=iotdb \
-  --from-literal=POSTGRES_USER=iotuser \
-  --from-literal=POSTGRES_PASSWORD=iotpass
+# kubectl create secret generic db-credentials \
+#   --namespace=iot-system \
+#   --from-literal=POSTGRES_DB=iotdb \
+#   --from-literal=POSTGRES_USER=iotuser \
+#   --from-literal=POSTGRES_PASSWORD=iotpass
 
 # Prepare imagePullPolicy flag if needed
 if [ "$FORCE_PULL" = true ]; then
@@ -81,6 +91,8 @@ fi
 # Deploy everything using Helm with scale set to 0 for non-DB components
 echo "==> PHASE 1: Deploying with database-only (other components scaled to 0)..."
 helm upgrade --install iot-system ./charts/iot-system -n iot-system --create-namespace $PULL_POLICY_ARGS \
+  --set timescaledb.database.password=na123 \
+  --set mosquitto.config.allowAnonymous=false \
   --set iotService.replicas=0 \
   --set webBackend.replicas=0 \
   --set webFrontend.replicas=0 \
@@ -155,17 +167,9 @@ echo "==> Database initialization complete and verified."
 
 # PHASE 2: Scale up other components now that the database is ready
 echo "==> PHASE 2: Scaling up other components now that database is ready..."
-helm upgrade --install iot-system ./charts/iot-system -n iot-system $PULL_POLICY_ARGS
-
-# Phase 3: Setting up monitoring components
-echo "==> PHASE 3: Setting up Prometheus and Grafana..."
-echo "==> Creating Prometheus ConfigMap..."
-kubectl apply -f k8s/prometheus-config.yaml
-
-echo "==> Creating ConfigMap with correct name for Prometheus..."
-kubectl get configmap prometheus-config -n iot-system -o yaml | \
-  sed 's/name: prometheus-config/name: prometheus-prometheus-config/' | \
-  kubectl apply -f -
+helm upgrade --install iot-system ./charts/iot-system -n iot-system $PULL_POLICY_ARGS \
+  --set timescaledb.database.password=na123 \
+  --set mosquitto.config.allowAnonymous=false
 
 echo "==> Adding Helm repositories if needed..."
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
@@ -181,12 +185,6 @@ echo "==> Installing Grafana with Helm..."
 helm upgrade --install grafana grafana/grafana \
   -f k8s/grafana-values.yaml \
   --namespace iot-system
-
-echo "==> Setting up Ingress for monitoring tools..."
-kubectl apply -f k8s/monitoring-ingress.yaml
-
-echo "==> Applying app-ingress.yaml for routing..."
-kubectl apply -f k8s/app-ingress.yaml
 
 # Phase 4: Waiting for all other services to be ready
 echo "==> PHASE 4: Waiting for all pods to be ready..."
@@ -237,3 +235,11 @@ echo "Web Backend API: http://${INGRESS_IP}/api"
 echo ""
 echo "==> DONE!  Don't forget to clear your browser cache completely before testing!"
 kubectl logs -l app=iot-service -n iot-system -f
+
+
+# kubectl logs -l app=mosquitto -n iot-system
+# kubectl logs -l app=iot-service -n iot-system
+# kubectl logs -l app=web-frontend -n iot-system
+# kubectl logs -l app=web-backend -n iot-system
+# kubectl logs -l app=test-pub -n iot-system
+# kubectl logs -l app=timescaledb -n iot-system

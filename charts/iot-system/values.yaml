@@ -26,16 +26,6 @@ mosquitto:
   config:
     allowAnonymous: false
     useTLS: true
-    useAuth: true
-  auth:
-    secretName: mosquitto-auth
-  credentials:
-    iotService:
-      username: iot_service
-      password: secure_iot_password
-    testPub:
-      username: test_pub
-      password: test_password
   securityContext:
     runAsUser: 1000
     runAsNonRoot: true
@@ -59,6 +49,10 @@ iotService:
       memory: "256Mi"
       cpu: "200m"
   port: 5000
+  # Metrics configuration
+  metrics:
+    enabled: true
+    port: 8000
 
 # Test publisher configuration
 testPub:
@@ -92,8 +86,11 @@ timescaledb:
       memory: "512Mi"
       cpu: "500m"
   port: 5432
-  # Database credentials are now managed via external Kubernetes Secret
-  # and no longer stored in this file
+  database:
+    name: iotdb
+    user: iotuser
+    # Remove hardcoded password
+    existingSecret: db-credentials
 
 # Web Backend configuration
 webBackend:
@@ -135,3 +132,86 @@ webFrontend:
 # Network policy settings
 networkPolicy:
   enabled: true
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+
+# Monitoring-specific configurations
+monitoring:
+  ingress:
+    enabled: true
+    className: nginx
+    annotations: {}
+    prometheus:
+      host: prometheus.iot-dashboard.local
+    grafana:
+      host: grafana.iot-dashboard.local
+
+# Prometheus configuration
+prometheus:
+  server:
+    service:
+      type: NodePort
+    persistentVolume:
+      enabled: true
+      size: 10Gi
+    config:
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+      scrape_configs:
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:9090']
+        - job_name: 'iot-service'
+          kubernetes_sd_configs:
+            - role: service
+              namespaces:
+                names:
+                  - iot-system
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_service_label_prometheus]
+              regex: "true"
+              action: keep
+            - source_labels: [__meta_kubernetes_service_port_name]
+              regex: "metrics"
+              action: keep
+
+# Grafana configuration
+grafana:
+  service:
+    type: NodePort
+  persistence:
+    enabled: true
+    size: 5Gi
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server.iot-system.svc.cluster.local
+        access: proxy
+        isDefault: true
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+  # Reference to external dashboard configuration file
+  dashboardFile: files/grafana-dashboard.json
+  ingress:
+    enabled: true
+    hosts:
+      - grafana.iot-dashboard.local

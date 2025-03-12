@@ -1,12 +1,16 @@
+# templates/ingress.yaml
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: iot-app-ingress
-  namespace: iot-system
+  namespace: {{ .Values.namespace }}
   annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
-  ingressClassName: nginx
+  ingressClassName: {{ .Values.ingress.className }}
   rules:
   - http:
       paths:
@@ -16,11 +20,12 @@ spec:
           service:
             name: web-backend
             port:
-              number: 5000
+              number: {{ .Values.webBackend.port }}
       - path: /
         pathType: Prefix
         backend:
           service:
             name: web-frontend
             port:
-              number: 3000
+              number: {{ .Values.webFrontend.service.port }}
+{{- end }}

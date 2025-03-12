@@ -15,7 +15,8 @@ function App() {
   const [selectedDevice, setSelectedDevice] = useState('');
   const [sensorData, setSensorData] = useState([]);
   const [hours, setHours] = useState(24);
-  const apiUrl = '';  // Empty string for relative URLs
+// FORCED REBUILD: 2025-03-09
+const apiUrl = '';  // Empty string for relative URLs
 
   useEffect(() => {
     fetch(`${apiUrl}/api/devices`)

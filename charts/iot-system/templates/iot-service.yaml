@@ -34,19 +34,15 @@ spec:
             - ALL
           runAsNonRoot: true
           runAsUser: {{ .Values.iotService.securityContext.runAsUser }}
+        ports:
+        - containerPort: {{ .Values.iotService.port }}
+        {{- if .Values.iotService.metrics.enabled }}
+        - containerPort: {{ .Values.iotService.metrics.port }}
+          name: metrics
+        {{- end }}
         env:
         - name: MQTT_BROKER
           value: mosquitto
-        - name: MQTT_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: mosquitto-credentials
-              key: IOT_SERVICE_USERNAME
-        - name: MQTT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mosquitto-credentials
-              key: IOT_SERVICE_PASSWORD
         - name: POSTGRES_DB
           valueFrom:
             secretKeyRef:

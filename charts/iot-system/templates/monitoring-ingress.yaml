@@ -1,0 +1,37 @@
+# templates/monitoring-ingress.yaml
+{{- if .Values.monitoring.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "iot-system.labels" . | nindent 4 }}
+  {{- with .Values.monitoring.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.monitoring.ingress.className }}
+  rules:
+  - host: {{ .Values.monitoring.ingress.prometheus.host }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-server
+            port:
+              number: 80
+  - host: {{ .Values.monitoring.ingress.grafana.host }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 80
+{{- end }}

@@ -86,14 +86,14 @@ client = mqtt.Client()
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
 
+# Set up authentication
+username = "test_pub"
+password = "na123"  # This is the password you set
+client.username_pw_set(username, password)
+
 # Configure TLS
 client.tls_set(ca_certs="/mosquitto/certs/ca.crt", tls_version=ssl.PROTOCOL_TLSv1_2)
 #client.tls_insecure_set(True)  # For testing only; remove in production
-
-# Add username and password authentication
-mqtt_username = os.getenv("MQTT_USERNAME", "test_pub")
-mqtt_password = os.getenv("MQTT_PASSWORD", "")
-client.username_pw_set(mqtt_username, mqtt_password)
 
 # Enable automatic reconnection
 client.reconnect_delay_set(min_delay=1, max_delay=30)

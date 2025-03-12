@@ -6,31 +6,32 @@ labels: bug
 assignees: nathandiez
 ---
 
-Issue Description
+## Issue Description
 <!-- Brief description of the bug or issue -->
 
-Current Behavior
+## Current Behavior
 <!-- What currently happens -->
 
-Expected Behavior
+## Expected Behavior
 <!-- What should happen instead -->
 
-Steps to Fix
-<!-- First step -->
-<!-- Second step -->
-<!-- Third step -->
+## Steps to Fix
+1. <!-- First step -->
+2. <!-- Second step -->
+3. <!-- Third step -->
 
-Technical Details
-Files to modify: <!-- list of files -->
-Components affected: <!-- components -->
+## Technical Details
+- **Files to modify**: <!-- list of files -->
+- **Components affected**: <!-- components -->
 
-Definition of Done
-[ ] <!-- First criterion -->
-[ ] <!-- Second criterion -->
-[ ] <!-- Tests pass -->
+## Definition of Done
+- [ ] <!-- First criterion -->
+- [ ] <!-- Second criterion -->
+- [ ] <!-- Tests pass -->
 
-Priority
+## Priority
 <!-- High/Medium/Low -->
 
-Additional Context
+## Additional Context
 <!-- Any extra information that might be helpful -->
+

@@ -160,14 +160,14 @@ client.on_message = on_message
 client.on_subscribe = on_subscribe
 client.on_disconnect = on_disconnect
 
+# Set up authentication
+username = "iot_service"
+password = "na123"  # Replace with password you set
+client.username_pw_set(username, password)
+
 # Configure TLS: adjust the CA certificate path as needed
 client.tls_set(ca_certs="/mosquitto/certs/ca.crt", tls_version=ssl.PROTOCOL_TLSv1_2)
 #client.tls_insecure_set(True)  # For testing only; remove in production
-
-# Add username and password authentication
-mqtt_username = os.getenv("MQTT_USERNAME", "iot_service")
-mqtt_password = os.getenv("MQTT_PASSWORD", "")
-client.username_pw_set(mqtt_username, mqtt_password)
 
 # Get broker address from environment variable, default to mqtt
 broker_address = os.getenv("MQTT_BROKER", "mqtt")

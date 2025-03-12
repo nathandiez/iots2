@@ -37,16 +37,6 @@ spec:
         env:
         - name: MQTT_BROKER
           value: mosquitto
-        - name: MQTT_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: mosquitto-credentials
-              key: TEST_PUB_USERNAME
-        - name: MQTT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mosquitto-credentials
-              key: TEST_PUB_PASSWORD
         {{- if .Values.certificates.mosquitto.enabled }}
         volumeMounts:
         - name: mosquitto-certs
