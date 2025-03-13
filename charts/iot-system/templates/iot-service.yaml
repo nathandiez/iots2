@@ -43,6 +43,16 @@ spec:
         env:
         - name: MQTT_BROKER
           value: mosquitto
+        - name: MQTT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mosquitto-passwd
+              key: username-iot-service
+        - name: MQTT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mosquitto-passwd
+              key: password-iot-service
         - name: POSTGRES_DB
           valueFrom:
             secretKeyRef:

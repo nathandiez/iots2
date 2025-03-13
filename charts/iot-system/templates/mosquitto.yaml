@@ -64,6 +64,9 @@ spec:
       - name: mosquitto-passwd
         secret:
           secretName: mosquitto-passwd
+          items:
+          - key: mosquitto_passwd
+            path: mosquitto_passwd
 ---
 apiVersion: v1
 kind: ConfigMap

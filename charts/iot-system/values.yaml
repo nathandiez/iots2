@@ -26,6 +26,9 @@ mosquitto:
   config:
     allowAnonymous: false
     useTLS: true
+  credentials:
+    iotServicePassword: ""  # Leave empty for auto-generation 
+    testPubPassword: ""     # Leave empty for auto-generation
   securityContext:
     runAsUser: 1000
     runAsNonRoot: true

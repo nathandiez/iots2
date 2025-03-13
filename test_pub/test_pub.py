@@ -86,9 +86,9 @@ client = mqtt.Client()
 client.on_connect = on_connect
 client.on_disconnect = on_disconnect
 
-# Set up authentication
-username = "test_pub"
-password = "na123"  # This is the password you set
+# Set up authentication with environment variables
+username = os.getenv("MQTT_USERNAME", "test_pub")
+password = os.getenv("MQTT_PASSWORD", "")
 client.username_pw_set(username, password)
 
 # Configure TLS
