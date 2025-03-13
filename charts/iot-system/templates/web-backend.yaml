@@ -36,6 +36,20 @@ spec:
           runAsUser: {{ .Values.webBackend.securityContext.runAsUser }}
         ports:
         - containerPort: {{ .Values.webBackend.port }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.webBackend.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.webBackend.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
         env:
         - name: POSTGRES_DB
           valueFrom:

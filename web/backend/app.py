@@ -26,6 +26,17 @@ def get_db_connection():
         port=os.getenv("POSTGRES_PORT", "5432")
     )
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    try:
+        # Test DB connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                return jsonify({"status": "healthy"})
+    except Exception as e:
+        return jsonify({"status": "unhealthy", "reason": str(e)}), 500
+
 @app.route('/api/devices', methods=['GET'])
 @require_api_key
 def get_devices():
