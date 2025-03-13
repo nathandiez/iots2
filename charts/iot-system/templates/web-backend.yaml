@@ -56,6 +56,11 @@ spec:
           value: timescaledb
         - name: POSTGRES_PORT
           value: "{{ .Values.timescaledb.port }}"
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-credentials
+              key: API_KEY
         resources:
           {{- toYaml .Values.webBackend.resources | nindent 10 }}
 ---

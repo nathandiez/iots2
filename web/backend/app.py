@@ -3,9 +3,19 @@ from flask_cors import CORS
 import psycopg2
 import os
 from datetime import datetime, timedelta
+from functools import wraps
 
 app = Flask(__name__)
 CORS(app)
+
+def require_api_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key')
+        if api_key != os.getenv("API_KEY"):
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 def get_db_connection():
     return psycopg2.connect(
@@ -17,6 +27,7 @@ def get_db_connection():
     )
 
 @app.route('/api/devices', methods=['GET'])
+@require_api_key
 def get_devices():
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -25,6 +36,7 @@ def get_devices():
             return jsonify(devices)
 
 @app.route('/api/sensor-data', methods=['GET'])
+@require_api_key
 def get_sensor_data():
     device_id = request.args.get('device_id')
     hours = int(request.args.get('hours', 24))
@@ -52,6 +64,7 @@ def get_sensor_data():
             return jsonify(results)
 
 @app.route('/api/stats', methods=['GET'])
+@require_api_key
 def get_stats():
     with get_db_connection() as conn:
         with conn.cursor() as cur:

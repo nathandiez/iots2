@@ -17,9 +17,14 @@ function App() {
   const [hours, setHours] = useState(24);
 // FORCED REBUILD: 2025-03-09
 const apiUrl = '';  // Empty string for relative URLs
+const apiKey = 'V2Rvl3oopKZovBFElU83BhbwNqr6WaAd';  // API key for authentication
 
   useEffect(() => {
-    fetch(`${apiUrl}/api/devices`)
+    fetch(`${apiUrl}/api/devices`, {
+      headers: {
+        'X-API-Key': apiKey
+      }
+    })
       .then((res) => res.json())
       .then((data) => {
         setDevices(data);
@@ -31,7 +36,11 @@ const apiUrl = '';  // Empty string for relative URLs
 
   const fetchSensorData = () => {
     if (selectedDevice) {
-      fetch(`${apiUrl}/api/sensor-data?device_id=${selectedDevice}&hours=${hours}`)
+      fetch(`${apiUrl}/api/sensor-data?device_id=${selectedDevice}&hours=${hours}`, {
+        headers: {
+          'X-API-Key': apiKey
+        }
+      })
         .then((res) => res.json())
         .then(setSensorData);
     }
