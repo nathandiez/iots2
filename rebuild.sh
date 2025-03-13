@@ -59,15 +59,7 @@ kubectl delete namespace iot-system --ignore-not-found
 echo "==> Recreating namespace 'iot-system'..."
 kubectl create namespace iot-system
 
-echo "==> Creating mosquitto password secret..."
-# Check if the secret already exists
-if kubectl get secret mosquitto-passwd -n iot-system >/dev/null 2>&1; then
-  echo "Secret 'mosquitto-passwd' already exists, skipping creation"
-else
-  # Create the secret from the password file
-  kubectl create secret generic mosquitto-passwd --from-file=mosquitto_passwd -n iot-system
-  echo "Secret 'mosquitto-passwd' created"
-fi
+# REMOVED: Creating mosquitto password secret manually - will be handled by Helm
 
 echo "==> Setting current context to 'iot-system'..."
 kubectl config set-context --current --namespace=iot-system
@@ -96,6 +88,8 @@ echo "==> PHASE 1: Deploying with database-only (other components scaled to 0)..
 helm upgrade --install iot-system ./charts/iot-system -n iot-system --create-namespace $PULL_POLICY_ARGS \
   --set timescaledb.database.password=na123 \
   --set mosquitto.config.allowAnonymous=false \
+  --set mosquitto.credentials.iotServicePassword=na123 \
+  --set mosquitto.credentials.testPubPassword=na123 \
   --set iotService.replicas=0 \
   --set webBackend.replicas=0 \
   --set webFrontend.replicas=0 \
@@ -175,6 +169,8 @@ echo "==> PHASE 2: Scaling up other components now that database is ready..."
 helm upgrade --install iot-system ./charts/iot-system -n iot-system $PULL_POLICY_ARGS \
   --set timescaledb.database.password=na123 \
   --set mosquitto.config.allowAnonymous=false \
+  --set mosquitto.credentials.iotServicePassword=na123 \
+  --set mosquitto.credentials.testPubPassword=na123 \
   --set prometheus.enabled=true \
   --set grafana.enabled=true
 
@@ -221,9 +217,9 @@ cd ~/projects/iots2
 # Restart the deployments to pick up the new certificates
 kubectl rollout restart deployment/mosquitto deployment/iot-service deployment/test-pub -n iot-system
 
-# Add authentication environment variables
-kubectl set env deployment/iot-service MQTT_USERNAME=iot_service MQTT_PASSWORD=na123 -n iot-system
-kubectl set env deployment/test-pub MQTT_USERNAME=test_pub MQTT_PASSWORD=na123 -n iot-system
+# REMOVED: No need to set env variables directly as they are now injected from secrets
+# kubectl set env deployment/iot-service MQTT_USERNAME=iot_service MQTT_PASSWORD=na123 -n iot-system
+# kubectl set env deployment/test-pub MQTT_USERNAME=test_pub MQTT_PASSWORD=na123 -n iot-system
 
 echo "==> Waiting for services to restart with new certificates..."
 sleep 15
