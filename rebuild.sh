@@ -19,6 +19,13 @@ done
 
 echo "==> Starting complete rebuild of IoT system..."
 
+# Check if cert-manager is installed
+echo "==> Checking if cert-manager is installed..."
+if ! kubectl get clusterissuers letsencrypt-prod > /dev/null 2>&1; then
+  echo "WARNING: ClusterIssuer 'letsencrypt-prod' not found. HTTPS for ingress may not work."
+  echo "Make sure cert-manager is installed and configured with a 'letsencrypt-prod' ClusterIssuer."
+fi
+
 # Add image pulling section if flag is set
 if [ "$FORCE_PULL" = true ]; then
   echo "==> Force pull flag detected. Pulling latest Docker images..."
@@ -86,6 +93,7 @@ fi
 # Deploy everything using Helm with scale set to 0 for non-DB components
 echo "==> PHASE 1: Deploying with database-only (other components scaled to 0)..."
 helm upgrade --install iot-system ./charts/iot-system -n iot-system --create-namespace $PULL_POLICY_ARGS \
+  --set ingress.host=your-iot-domain.local \
   --set timescaledb.database.password=na123 \
   --set mosquitto.config.allowAnonymous=false \
   --set mosquitto.credentials.iotServicePassword=na123 \
@@ -167,6 +175,7 @@ echo "==> Database initialization complete and verified."
 # PHASE 2: Scale up other components now that the database is ready
 echo "==> PHASE 2: Scaling up other components now that database is ready..."
 helm upgrade --install iot-system ./charts/iot-system -n iot-system $PULL_POLICY_ARGS \
+  --set ingress.host=your-iot-domain.local \
   --set timescaledb.database.password=na123 \
   --set mosquitto.config.allowAnonymous=false \
   --set mosquitto.credentials.iotServicePassword=na123 \
@@ -281,8 +290,8 @@ echo "Web Backend API: http://192.168.6.11:${WEB_BACKEND_NODEPORT}"
 
 echo ""
 echo "Ingress access:"
-echo "Web Frontend: http://${INGRESS_IP}"
-echo "Web Backend API: http://${INGRESS_IP}/api"
+echo "Web Frontend: https://your-iot-domain.local"
+echo "Web Backend API: https://your-iot-domain.local/api"
 
 # Add Grafana and Prometheus NodePort information
 GRAFANA_NODEPORT=$(kubectl get service iot-system-grafana -n iot-system -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "unknown")
@@ -293,8 +302,8 @@ echo "Prometheus: http://192.168.6.11:${PROMETHEUS_NODEPORT}"
 
 echo ""
 echo "Monitoring Ingress access:"
-echo "Grafana: http://grafana.iot-dashboard.local (add to /etc/hosts if using local DNS)"
-echo "Prometheus: http://prometheus.iot-dashboard.local (add to /etc/hosts if using local DNS)"
+echo "Grafana: https://grafana.iot-dashboard.local (add to /etc/hosts if using local DNS)"
+echo "Prometheus: https://prometheus.iot-dashboard.local (add to /etc/hosts if using local DNS)"
 
 echo ""
 echo "==> DONE!  Don't forget to clear your browser cache completely before testing!"

@@ -6,13 +6,24 @@ metadata:
   name: iot-app-ingress
   namespace: {{ .Values.namespace }}
   annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/hsts: "true"
+    nginx.ingress.kubernetes.io/hsts-max-age: "31536000"
+    nginx.ingress.kubernetes.io/hsts-include-subdomains: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
     {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  tls:
+  - hosts:
+    - {{ .Values.ingress.host }}
+    secretName: iot-tls-cert
   rules:
-  - http:
+  - host: {{ .Values.ingress.host }}
+    http:
       paths:
       - path: /api
         pathType: Prefix

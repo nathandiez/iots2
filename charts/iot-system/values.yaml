@@ -140,6 +140,7 @@ networkPolicy:
 ingress:
   enabled: true
   className: nginx
+  host: your-iot-domain.local
   annotations:
     nginx.ingress.kubernetes.io/use-regex: "true"
 

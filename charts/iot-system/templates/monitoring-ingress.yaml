@@ -7,12 +7,23 @@ metadata:
   namespace: {{ .Values.namespace }}
   labels:
     {{- include "iot-system.labels" . | nindent 4 }}
-  {{- with .Values.monitoring.ingress.annotations }}
   annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/hsts: "true"
+    nginx.ingress.kubernetes.io/hsts-max-age: "31536000"
+    nginx.ingress.kubernetes.io/hsts-include-subdomains: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    {{- with .Values.monitoring.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.monitoring.ingress.className }}
+  tls:
+  - hosts:
+    - {{ .Values.monitoring.ingress.prometheus.host }}
+    - {{ .Values.monitoring.ingress.grafana.host }}
+    secretName: monitoring-tls-cert
   rules:
   - host: {{ .Values.monitoring.ingress.prometheus.host }}
     http:
