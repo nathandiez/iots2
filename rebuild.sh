@@ -44,6 +44,9 @@ if [ "$FORCE_PULL" = true ]; then
   echo "==> All images pulled successfully"
 fi
 
+echo "==> Updating Helm dependencies..."
+helm dependency update ./charts/iot-system
+
 # Helm and namespace related steps
 echo "==> Uninstalling existing Helm releases (if any)..."
 helm uninstall iot-system -n iot-system || true
@@ -97,7 +100,9 @@ helm upgrade --install iot-system ./charts/iot-system -n iot-system --create-nam
   --set webBackend.replicas=0 \
   --set webFrontend.replicas=0 \
   --set testPub.replicas=0 \
-  --set mosquitto.replicas=0
+  --set mosquitto.replicas=0 \
+  --set prometheus.enabled=false \
+  --set grafana.enabled=false
 
 echo "==> Waiting for TimescaleDB pod to be ready..."
 kubectl wait --for=condition=ready pod -l app=timescaledb -n iot-system --timeout=720s
@@ -169,22 +174,62 @@ echo "==> Database initialization complete and verified."
 echo "==> PHASE 2: Scaling up other components now that database is ready..."
 helm upgrade --install iot-system ./charts/iot-system -n iot-system $PULL_POLICY_ARGS \
   --set timescaledb.database.password=na123 \
-  --set mosquitto.config.allowAnonymous=false
+  --set mosquitto.config.allowAnonymous=false \
+  --set prometheus.enabled=true \
+  --set grafana.enabled=true
 
-echo "==> Adding Helm repositories if needed..."
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
-helm repo add grafana https://grafana.github.io/helm-charts || true
-helm repo update
+# Create and apply proper certificates for mosquitto
+echo "==> Creating proper TLS certificates for Mosquitto..."
+cd ~/projects/iots2/certs
 
-echo "==> Installing Prometheus with Helm..."
-helm upgrade --install prometheus prometheus-community/prometheus \
-  -f k8s/prometheus-values.yaml \
-  --namespace iot-system
+# Create a CA key and certificate
+openssl genrsa -out ca.key 2048
+openssl req -x509 -new -nodes -key ca.key -sha256 -days 3650 -out ca.crt -subj "/CN=IoT-Root-CA"
 
-echo "==> Installing Grafana with Helm..."
-helm upgrade --install grafana grafana/grafana \
-  -f k8s/grafana-values.yaml \
-  --namespace iot-system
+# Create a server key
+openssl genrsa -out server.key 2048
+
+# Create a CSR with "mosquitto" as the Common Name
+openssl req -new -key server.key -out server.csr -subj "/CN=mosquitto"
+
+# Create a temporary OpenSSL config with both "mosquitto" and the FQDN as SANs
+cat > /tmp/openssl.cnf <<EOF
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+
+[req_distinguished_name]
+
+[v3_req]
+subjectAltName = DNS:mosquitto,DNS:mosquitto.iot-system.svc.cluster.local
+EOF
+
+# Generate the certificate
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365 -extfile /tmp/openssl.cnf -extensions v3_req
+
+# Update the K8s secret with our properly configured certificates
+kubectl delete secret mosquitto-certs -n iot-system --ignore-not-found
+kubectl create secret generic mosquitto-certs \
+  --from-file=ca.crt=./ca.crt \
+  --from-file=server.crt=./server.crt \
+  --from-file=server.key=./server.key \
+  -n iot-system
+
+# Return to original directory
+cd ~/projects/iots2
+
+# Restart the deployments to pick up the new certificates
+kubectl rollout restart deployment/mosquitto deployment/iot-service deployment/test-pub -n iot-system
+
+# Add authentication environment variables
+kubectl set env deployment/iot-service MQTT_USERNAME=iot_service MQTT_PASSWORD=na123 -n iot-system
+kubectl set env deployment/test-pub MQTT_USERNAME=test_pub MQTT_PASSWORD=na123 -n iot-system
+
+echo "==> Waiting for services to restart with new certificates..."
+sleep 15
+
+echo "==> Updating Helm dependencies..."
+helm dependency update ./charts/iot-system
 
 # Phase 4: Waiting for all other services to be ready
 echo "==> PHASE 4: Waiting for all pods to be ready..."
@@ -194,14 +239,25 @@ kubectl wait --for=condition=ready pod -l app=web-frontend -n iot-system --timeo
 kubectl wait --for=condition=ready pod -l app=web-backend -n iot-system --timeout=180s || true
 
 # Use a different approach for Prometheus server
-echo "==> Waiting for Prometheus server pod..."
-sleep 30
-PROM_POD=$(kubectl get pod -l app.kubernetes.io/component=server -n iot-system -o name 2>/dev/null || echo "")
-if [ -n "$PROM_POD" ]; then
-  echo "Found Prometheus pod: $PROM_POD"
-  kubectl wait --for=condition=ready $PROM_POD -n iot-system --timeout=180s || true
-else
-  echo "No Prometheus pod found yet, continuing anyway"
+echo "==> Waiting for Prometheus server pod to be created..."
+TIMEOUT=120  # Total timeout in seconds
+INTERVAL=5   # Check interval in seconds
+ELAPSED=0
+
+while [ $ELAPSED -lt $TIMEOUT ]; do
+  PROM_POD=$(kubectl get pod -n iot-system | grep prometheus-server | grep -v pushgateway | awk '{print $1}' 2>/dev/null || echo "")
+  if [ -n "$PROM_POD" ]; then
+    echo "Found Prometheus pod: $PROM_POD"
+    kubectl wait --for=condition=ready pod/$PROM_POD -n iot-system --timeout=180s || true
+    break
+  fi
+  echo "Waiting for Prometheus pod to be created... ($ELAPSED/$TIMEOUT seconds)"
+  sleep $INTERVAL
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+
+if [ $ELAPSED -ge $TIMEOUT ]; then
+  echo "Timeout waiting for Prometheus pod, continuing anyway"
 fi
 
 sleep 10
@@ -231,6 +287,18 @@ echo ""
 echo "Ingress access:"
 echo "Web Frontend: http://${INGRESS_IP}"
 echo "Web Backend API: http://${INGRESS_IP}/api"
+
+# Add Grafana and Prometheus NodePort information
+GRAFANA_NODEPORT=$(kubectl get service iot-system-grafana -n iot-system -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "unknown")
+PROMETHEUS_NODEPORT=$(kubectl get service iot-system-prometheus-server -n iot-system -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "unknown")
+
+echo "Grafana: http://192.168.6.11:${GRAFANA_NODEPORT}"
+echo "Prometheus: http://192.168.6.11:${PROMETHEUS_NODEPORT}"
+
+echo ""
+echo "Monitoring Ingress access:"
+echo "Grafana: http://grafana.iot-dashboard.local (add to /etc/hosts if using local DNS)"
+echo "Prometheus: http://prometheus.iot-dashboard.local (add to /etc/hosts if using local DNS)"
 
 echo ""
 echo "==> DONE!  Don't forget to clear your browser cache completely before testing!"

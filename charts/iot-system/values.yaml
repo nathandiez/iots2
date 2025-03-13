@@ -153,6 +153,7 @@ monitoring:
 
 # Prometheus configuration
 prometheus:
+  enabled: true  # Added this line
   server:
     service:
       type: NodePort
@@ -183,6 +184,7 @@ prometheus:
 
 # Grafana configuration
 grafana:
+  enabled: true  # Added this line
   service:
     type: NodePort
   persistence:
