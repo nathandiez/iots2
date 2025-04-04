@@ -1,3 +1,4 @@
+// web frontend App.js
 import React, { useState, useEffect } from 'react';
 import {
   LineChart,
@@ -139,7 +140,34 @@ const apiKey = 'V2Rvl3oopKZovBFElU83BhbwNqr6WaAd';  // API key for authenticatio
                     }}
                   />
                   <YAxis />
-                  <Tooltip labelFormatter={(time) => formatTime(time)} />
+                  <Tooltip 
+                    labelFormatter={(time) => formatTime(time)} 
+                    formatter={(value, name, props) => {
+                      if (name === 'Temp (°F)' || name === 'Humidity (%)') {
+                        return [value?.toFixed(1) || '----', name];
+                      }
+                      return [value || '----', name];
+                    }}
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-white p-3 border border-gray-200 shadow-md rounded">
+                            <p className="font-semibold">{formatTime(label)}</p>
+                            {data.event_type && (
+                              <p className="text-gray-600">Event: {data.event_type}</p>
+                            )}
+                            {payload.map((entry, index) => (
+                              <p key={index} style={{ color: entry.color }}>
+                                {entry.name}: {entry.value?.toFixed(1) || '----'}
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
                   <Legend />
                   <Line
                     type="monotone"
@@ -170,6 +198,10 @@ const apiKey = 'V2Rvl3oopKZovBFElU83BhbwNqr6WaAd';  // API key for authenticatio
                     <th className="px-4 py-2 text-left font-semibold text-blue-800 uppercase">
                       Time (ET)
                     </th>
+                    {/* Event Type Header */}
+                    <th className="px-4 py-2 text-left font-semibold text-blue-800 uppercase">
+                      Event Type
+                    </th>
                     <th className="px-4 py-2 text-right font-semibold text-blue-800 uppercase">
                       Temp (°F)
                     </th>
@@ -190,7 +222,7 @@ const apiKey = 'V2Rvl3oopKZovBFElU83BhbwNqr6WaAd';  // API key for authenticatio
                 <tbody>
                   {sensorData.map((reading, index) => (
                     <tr
-                      key={index}
+                      key={index} // Consider using a more stable key if available (e.g., reading.timestamp + reading.device_id)
                       className={`border-t border-gray-300 ${
                         index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                       } hover:bg-blue-50 transition-colors duration-200`}
@@ -198,17 +230,20 @@ const apiKey = 'V2Rvl3oopKZovBFElU83BhbwNqr6WaAd';  // API key for authenticatio
                       <td className="px-4 py-2">
                         {formatTime(reading.time)}
                       </td>
+                      {/* Event Type Data Cell - using null coalescing operator */}
+                      <td className="px-4 py-2 text-left">{reading.event_type ?? '----'}</td>
                       <td className="px-4 py-2 text-right">
-                        {reading.temperature.toFixed(1)}
+                        {/* Handle potential null values from DB before toFixed */}
+                        {reading.temperature != null ? reading.temperature.toFixed(1) : '----'}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        {reading.humidity.toFixed(1)}
+                        {reading.humidity != null ? reading.humidity.toFixed(1) : '----'}
                       </td>
                       <td className="px-4 py-2 text-right">
-                        {reading.pressure.toFixed(2)}
+                        {reading.pressure != null ? reading.pressure.toFixed(1) : '----'}
                       </td>
-                      <td className="px-4 py-2 text-right">{reading.motion}</td>
-                      <td className="px-4 py-2 text-right">{reading.switch}</td>
+                      <td className="px-4 py-2 text-right">{reading.motion ?? '----'}</td>
+                      <td className="px-4 py-2 text-right">{reading.switch ?? '----'}</td>
                     </tr>
                   ))}
                 </tbody>

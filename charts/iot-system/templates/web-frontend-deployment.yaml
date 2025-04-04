@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: web-frontend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
+    helm.sh/chart: {{ include "iot-system.chart" . }}
+spec:
+  replicas: {{ .Values.webFrontend.replicas }}
+  selector:
+    matchLabels:
+      app: web-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  template:
+    metadata:
+      labels:
+        app: web-frontend
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: {{ include "iot-system.name" . }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: web-frontend
+        image: "{{ .Values.webFrontend.image.repository }}:{{ .Values.webFrontend.image.tag }}"
+        imagePullPolicy: {{ .Values.webFrontend.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.webFrontend.port }}
+          protocol: TCP
+        env:
+        - name: REACT_APP_API_URL
+          value: /api
+        livenessProbe:
+          httpGet:
+            path: /
+            port: {{ .Values.webFrontend.port }}
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: {{ .Values.webFrontend.port }}
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: {{ .Values.webFrontend.resources.requests.cpu | quote }}
+            memory: {{ .Values.webFrontend.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.webFrontend.resources.limits.cpu | quote }}
+            memory: {{ .Values.webFrontend.resources.limits.memory | quote }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30

@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: web-backend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
+spec:
+  type: NodePort
+  ports:
+  - port: 5000
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  selector:
+    app: web-backend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: web-frontend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
+spec:
+  type: NodePort
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: web-frontend

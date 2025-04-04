@@ -2,41 +2,35 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: timescaledb
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "iot-system.labels" . | nindent 4 }}
     app: timescaledb
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.timescaledb.replicas | default 1 }}
   selector:
     matchLabels:
       app: timescaledb
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
         app: timescaledb
-        {{- include "iot-system.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: {{ include "iot-system.name" . }}
     spec:
-      serviceAccountName: {{ .Values.serviceAccount.name }}
-      initContainers:
-      - name: init-chmod-data
-        image: busybox
-        command: ['sh', '-c', 'chown -R 70:70 /var/lib/postgresql/data']
-        volumeMounts:
-        - name: timescaledb-data
-          mountPath: /var/lib/postgresql/data
-        securityContext:
-          runAsUser: 0
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
       containers:
       - name: timescaledb
         image: "{{ .Values.timescaledb.image.repository }}:{{ .Values.timescaledb.image.tag }}"
         imagePullPolicy: {{ .Values.timescaledb.image.pullPolicy }}
-        securityContext:
-          runAsUser: 70
-          runAsGroup: 70
-          runAsNonRoot: true
         ports:
         - containerPort: {{ .Values.timescaledb.port }}
+          name: postgres
         env:
         - name: POSTGRES_DB
           valueFrom:
@@ -53,77 +47,39 @@ spec:
             secretKeyRef:
               name: db-credentials
               key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        resources:
+          requests:
+            cpu: {{ .Values.timescaledb.resources.requests.cpu | quote }}
+            memory: {{ .Values.timescaledb.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.timescaledb.resources.limits.cpu | quote }}
+            memory: {{ .Values.timescaledb.resources.limits.memory | quote }}
+        securityContext:
+          runAsUser: {{ .Values.timescaledb.securityContext.runAsUser }}
+          runAsNonRoot: {{ .Values.timescaledb.securityContext.runAsNonRoot }}
         volumeMounts:
         - name: timescaledb-data
           mountPath: /var/lib/postgresql/data
-        resources:
-          {{- toYaml .Values.timescaledb.resources | nindent 10 }}
       volumes:
       - name: timescaledb-data
-        {{- if .Values.timescaledb.persistence.enabled }}
-        persistentVolumeClaim:
-          claimName: timescaledb-pvc
-        {{- else }}
-        emptyDir: {}
-        {{- end }}
+        emptyDir: {}  # Persistence is disabled per values.yaml
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: timescaledb
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "iot-system.labels" . | nindent 4 }}
     app: timescaledb
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
 spec:
+  ports:
+  - port: {{ .Values.timescaledb.port }}
+    targetPort: {{ .Values.timescaledb.port }}
+    protocol: TCP
+    name: postgres
   selector:
     app: timescaledb
-  ports:
-    - protocol: TCP
-      port: {{ .Values.timescaledb.port }}
-      targetPort: {{ .Values.timescaledb.port }}
-
-{{- if .Values.timescaledb.persistence.enabled }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: timescaledb-pvc
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "iot-system.labels" . | nindent 4 }}
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ .Values.timescaledb.persistence.size }}
-{{- end }}
-
-{{- if .Values.networkPolicy.enabled }}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: timescaledb-policy
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "iot-system.labels" . | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      app: timescaledb
-  policyTypes:
-  - Ingress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: iot-service
-    - podSelector:
-        matchLabels:
-          app: web-backend
-    ports:
-    - protocol: TCP
-      port: {{ .Values.timescaledb.port }}
-{{- end }}

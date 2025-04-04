@@ -1,0 +1,28 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mosquitto-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: mosquitto-certs
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - {{ .Values.mosquitto.certificate.organization }}
+  isCA: false
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - server auth
+  dnsNames:
+    - mosquitto
+    - mosquitto.{{ include "iot-system.name" . }}
+    - mosquitto.{{ include "iot-system.name" . }}.svc
+    - mosquitto.{{ include "iot-system.name" . }}.svc.cluster.local
+    - mqtt.{{ .Values.ingress.host }}
+  issuerRef:
+    name: iot-ca-issuer
+    kind: Issuer
+    group: cert-manager.io

@@ -1,0 +1,83 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init-job
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
+spec:
+  template:
+    metadata:
+      name: db-init-job
+      labels:
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: db-init
+        image: postgres:14 # Or your preferred PostgreSQL version compatible with TimescaleDB
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "Waiting for TimescaleDB to be ready..."
+          until pg_isready -h timescaledb -p 5432 -U $POSTGRES_USER; do
+            sleep 2
+          done
+          echo "TimescaleDB is ready, initializing schema..."
+          psql -h timescaledb -U $POSTGRES_USER -d $POSTGRES_DB <<EOF
+          -- Create extension if needed (for TimescaleDB)
+          CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+
+          -- Create the sensor_data table if it doesn't exist
+          CREATE TABLE IF NOT EXISTS sensor_data (
+              time TIMESTAMPTZ NOT NULL,
+              device_id TEXT NOT NULL,
+              event_type TEXT, -- <<< ADDED event_type column (initially allowing NULL for ALTER compatibility)
+              temperature FLOAT,
+              humidity FLOAT,
+              pressure FLOAT,
+              motion TEXT,
+              switch TEXT
+          );
+
+          -- Add the event_type column if it doesn't exist (for upgrades)
+          -- Making it TEXT NULL is safer for existing tables, publisher should always send it now.
+          ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS event_type TEXT; -- <<< ADDED ALTER TABLE statement
+
+          -- Convert to hypertable if it isn't already
+          -- Ensures hypertables are created even if table existed before timescale extension
+          SELECT create_hypertable('sensor_data', 'time', if_not_exists => TRUE);
+
+          -- Create an index for faster device-specific queries if it doesn't exist
+          CREATE INDEX IF NOT EXISTS idx_sensor_data_device ON sensor_data(device_id, time DESC);
+
+          -- Optional: Add index for event_type if needed for frequent queries on type
+          -- CREATE INDEX IF NOT EXISTS idx_sensor_data_event_type ON sensor_data(event_type, time DESC);
+
+          -- Grant permissions
+          GRANT ALL PRIVILEGES ON TABLE sensor_data TO $POSTGRES_USER;
+          EOF
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_USER
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_DB

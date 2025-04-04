@@ -1,0 +1,912 @@
+---
+# Source: iot-system/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: iot-service-account
+  namespace: iot-system
+  labels:
+    app.kubernetes.io/name: iot-system
+    helm.sh/chart: iot-system-0.1.0
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: iot-system/templates/api-db-secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: iot-system
+  labels:
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/name: iot-system
+type: Opaque
+data:
+  POSTGRES_DB: aW90ZGI=
+  POSTGRES_USER: aW90dXNlcg==
+  POSTGRES_PASSWORD: cHcxMjM=
+---
+# Source: iot-system/templates/api-db-secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-credentials
+  namespace: iot-system
+  labels:
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/name: iot-system
+type: Opaque
+data:
+  API_KEY: YXBpa2V5MTIz
+---
+# Source: iot-system/templates/mosquitto-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  namespace: iot-system
+  labels:
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/name: iot-system
+data:
+  mosquitto.conf: |
+    # MQTT broker configuration
+    allow_anonymous false
+    password_file /mosquitto/passwd/mosquitto_passwd
+    listener 1883
+    
+    # TLS configuration
+    listener 8883
+    certfile /mosquitto/certs/tls.crt
+    keyfile /mosquitto/certs/tls.key
+    cafile /mosquitto/certs/ca.crt
+    require_certificate false
+    use_identity_as_username false
+---
+# Source: iot-system/templates/mosquitto-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    meta.helm.sh/release-name: iot-system
+    meta.helm.sh/release-namespace: iot-system
+  labels:
+    app: mosquitto
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: iot-system
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: iot-system-0.1.0
+  name: mosquitto
+  namespace: iot-system
+spec:
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: mqtt
+    port: 1883
+    protocol: TCP
+    targetPort: mqtt
+  - name: mqtts
+    port: 8883
+    protocol: TCP
+    targetPort: mqtts
+  selector:
+    app: mosquitto
+  sessionAffinity: None
+  type: ClusterIP
+---
+# Source: iot-system/templates/timescaledb.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb
+  namespace: iot-system
+  labels:
+    app: timescaledb
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/name: iot-system
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: timescaledb
+---
+# Source: iot-system/templates/web-services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-backend
+  namespace: iot-system
+  labels:
+    app: web-backend
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/name: iot-system
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  selector:
+    app: web-backend
+---
+# Source: iot-system/templates/web-services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-frontend
+  namespace: iot-system
+  labels:
+    app: web-frontend
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/name: iot-system
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: web-frontend
+---
+# Source: iot-system/templates/iot-service-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "9"
+    meta.helm.sh/release-name: iot-system
+    meta.helm.sh/release-namespace: iot-system
+  labels:
+    app: iotService
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: iot-system
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: iot-system-0.1.0
+  name: iot-service
+  namespace: iot-system
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: iotService
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2025-03-19T05:41:26-04:00"
+      labels:
+        app: iotService
+        app.kubernetes.io/instance: iot-system
+        app.kubernetes.io/name: iot-system
+    spec:
+      containers:
+      - env:
+        - name: MQTT_BROKER
+          value: mosquitto.iot-system.svc.cluster.local
+        - name: MQTT_USERNAME
+          value: iot_service
+        - name: MQTT_PASSWORD
+          value: pw123
+        - name: POSTGRES_HOST
+          value: timescaledb
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_DB
+              name: db-credentials
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: db-credentials
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: db-credentials
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: API_KEY
+              name: api-credentials
+        image: nathandiez12/iot-service:latest
+        imagePullPolicy: IfNotPresent
+        name: iot-service
+        ports:
+        - containerPort: 5000
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /mosquitto/certs
+          name: mosquitto-certs
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccount: iot-service-account
+      serviceAccountName: iot-service-account
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: mosquitto-certs
+        secret:
+          defaultMode: 420
+          items:
+          - key: ca.crt
+            path: ca.crt
+          secretName: mosquitto-certs
+---
+# Source: iot-system/templates/mosquitto-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    meta.helm.sh/release-name: iot-system
+    meta.helm.sh/release-namespace: iot-system
+  labels:
+    app: mosquitto
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: iot-system
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: iot-system-0.1.0
+  name: mosquitto
+  namespace: iot-system
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: mosquitto
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+        app.kubernetes.io/instance: iot-system
+        app.kubernetes.io/name: iot-system
+    spec:
+      containers:
+      - env:
+        - name: MOSQUITTO_ALLOW_ANONYMOUS
+          value: "false"
+        image: eclipse-mosquitto:2.0.18
+        imagePullPolicy: IfNotPresent
+        name: mosquitto
+        ports:
+        - containerPort: 1883
+          name: mqtt
+          protocol: TCP
+        - containerPort: 8883
+          name: mqtts
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /mosquitto/config/mosquitto.conf
+          name: mosquitto-config
+          subPath: mosquitto.conf
+        - mountPath: /mosquitto/data
+          name: mosquitto-data
+        - mountPath: /mosquitto/log
+          name: mosquitto-log
+        - mountPath: /mosquitto/certs
+          name: mosquitto-certs
+          readOnly: true
+        - mountPath: /mosquitto/passwd
+          name: mosquitto-passwd
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccount: iot-service-account
+      serviceAccountName: iot-service-account
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: mosquitto-config
+        name: mosquitto-config
+      - emptyDir: {}
+        name: mosquitto-data
+      - emptyDir: {}
+        name: mosquitto-log
+      - name: mosquitto-certs
+        secret:
+          defaultMode: 420
+          secretName: mosquitto-certs
+      - name: mosquitto-passwd
+        secret:
+          defaultMode: 420
+          secretName: mosquitto-credentials
+---
+# Source: iot-system/templates/test-pub-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "12"
+    meta.helm.sh/release-name: iot-system
+    meta.helm.sh/release-namespace: iot-system
+  labels:
+    app: test-pub
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: iot-system
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: iot-system-0.1.0
+  name: test-pub
+  namespace: iot-system
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: test-pub
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2025-03-19T05:44:16-04:00"
+      labels:
+        app: test-pub
+        app.kubernetes.io/instance: iot-system
+        app.kubernetes.io/name: iot-system
+    spec:
+      containers:
+      - env:
+        - name: MQTT_BROKER
+          value: mosquitto.iot-system.svc.cluster.local
+        - name: MQTT_USERNAME
+          value: test_pub
+        - name: MQTT_PASSWORD
+          value: pw123
+        image: nathandiez12/test-pub:latest
+        imagePullPolicy: IfNotPresent
+        name: test-pub
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /mosquitto/certs
+          name: mosquitto-certs
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccount: iot-service-account
+      serviceAccountName: iot-service-account
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: mosquitto-certs
+        secret:
+          defaultMode: 420
+          items:
+          - key: ca.crt
+            path: ca.crt
+          secretName: mosquitto-certs
+---
+# Source: iot-system/templates/timescaledb.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: timescaledb
+  namespace: iot-system
+  labels:
+    app: timescaledb
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/name: iot-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescaledb
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        app.kubernetes.io/instance: iot-system
+        app.kubernetes.io/name: iot-system
+    spec:
+      containers:
+      - name: timescaledb
+        image: timescale/timescaledb:2.11.1-pg14
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: timescaledb-data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: timescaledb-data
+        emptyDir: {}
+---
+# Source: iot-system/templates/web-backend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "2"
+    meta.helm.sh/release-name: iot-system
+    meta.helm.sh/release-namespace: iot-system
+  labels:
+    app: web-backend
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: iot-system
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: iot-system-0.1.0
+  name: web-backend
+  namespace: iot-system
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: web-backend
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2025-03-19T05:14:00-04:00"
+      labels:
+        app: web-backend
+        app.kubernetes.io/instance: iot-system
+        app.kubernetes.io/name: iot-system
+    spec:
+      containers:
+      - env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_DB
+              name: db-credentials
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: db-credentials
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: db-credentials
+        - name: POSTGRES_HOST
+          value: timescaledb
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: API_KEY
+              name: api-credentials
+        image: nathandiez12/web-backend:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 5000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: web-backend
+        ports:
+        - containerPort: 5000
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 5000
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccount: iot-service-account
+      serviceAccountName: iot-service-account
+      terminationGracePeriodSeconds: 30
+---
+# Source: iot-system/templates/web-frontend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    meta.helm.sh/release-name: iot-system
+    meta.helm.sh/release-namespace: iot-system
+  labels:
+    app: web-frontend
+    app.kubernetes.io/instance: iot-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: iot-system
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: iot-system-0.1.0
+  name: web-frontend
+  namespace: iot-system
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: web-frontend
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: web-frontend
+        app.kubernetes.io/instance: iot-system
+        app.kubernetes.io/name: iot-system
+    spec:
+      containers:
+      - env:
+        - name: REACT_APP_API_URL
+          value: /api
+        image: nathandiez12/web-frontend:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: web-frontend
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccount: iot-service-account
+      serviceAccountName: iot-service-account
+      terminationGracePeriodSeconds: 30
+---
+# Source: iot-system/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    meta.helm.sh/release-name: iot-system
+    meta.helm.sh/release-namespace: iot-system
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: iot-app-ingress
+  namespace: iot-system
+spec:
+  ingressClassName: gce
+  rules:
+  - host: iot.192.0.2.42.nip.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: web-backend
+            port:
+              number: 5000
+        path: /api
+        pathType: Prefix
+      - backend:
+          service:
+            name: web-frontend
+            port:
+              number: 3000
+        path: /
+        pathType: Prefix
+---
+# Source: iot-system/templates/secrets.yaml
+# apiVersion: v1
+# data:
+#   mosquitto_passwd: aW90X3NlcnZpY2U6JDckMTAxJExBc25scGtMdWZ4aVYwYUokOC9sb0d0Lzl3ZVlXRUtnZFhpSDdlZmhGL1NnaFZmMTlZV0NBNXEzS1BwRDhLL3JlK1d0NEdaUE81dlprREZZbDBZSWJ0b3dFZVNrVi9PZWxxTWkyYWc9PQp0ZXN0X3B1YjokNyQxMDEkcEZPWFUvUU95Z3JVUERIQ2RheDcxZTMxc3hFdytJUldjSmYrZ092OFB3VU96UEdzVU9EWTRWSE5tWmljSHdQWWlMa0dlZUhFRWhlWkdvRUJuS0NlUWVNZ01yVFBtMTN6SExDREdBc3c9PQo=
+#   password-iot-service: cHcxMjM=
+#   password-test-pub: cHcxMjM=
+#   username-iot-service: aW90X3NlcnZpY2U=
+#   username-test-pub: dGVzdF9wdWI=
+# kind: Secret
+# metadata:
+#   annotations:
+#     meta.helm.sh/release-name: iot-system
+#     meta.helm.sh/release-namespace: iot-system
+#   labels:
+#     app.kubernetes.io/instance: iot-system
+#     app.kubernetes.io/managed-by: Helm
+#     app.kubernetes.io/name: iot-system
+#     app.kubernetes.io/version: 1.0.0
+#     helm.sh/chart: iot-system-0.1.0
+#   name: mosquitto-credentials
+#   namespace: iot-system
+# type: Opaque
+---
+# Source: iot-system/templates/mosquitto-certificates.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mosquitto-server
+  namespace: iot-system
+spec:
+  secretName: mosquitto-certs
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - IoT System
+  isCA: false
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - server auth
+  dnsNames:
+    - mosquitto
+    - mosquitto.iot-system
+    - mosquitto.iot-system.svc
+    - mosquitto.iot-system.svc.cluster.local
+  issuerRef:
+    name: iot-ca-issuer
+    kind: Issuer
+    group: cert-manager.io
+---
+# Source: iot-system/templates/iot_ca_issuer.yaml
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: iot-ca-issuer
+  namespace: iot-system
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    meta.helm.sh/release-name: iot-system
+    meta.helm.sh/release-namespace: iot-system
+spec:
+  selfSigned: {}
+---
+# Source: iot-system/templates/db-init-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init-job
+  namespace: iot-system
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/instance: release-name
+    app.kubernetes.io/name: iot-system
+spec:
+  template:
+    metadata:
+      name: db-init-job
+      labels:
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/instance: release-name
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: db-init
+        image: postgres:14
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "Waiting for TimescaleDB to be ready..."
+          until pg_isready -h timescaledb -p 5432 -U $POSTGRES_USER; do
+            sleep 2
+          done
+          echo "TimescaleDB is ready, initializing schema..."
+          psql -h timescaledb -U $POSTGRES_USER -d $POSTGRES_DB <<EOF
+          -- Create extension if needed (for TimescaleDB)
+          CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+          
+          -- Create the sensor_data table if it doesn't exist
+          CREATE TABLE IF NOT EXISTS sensor_data (
+              time TIMESTAMPTZ NOT NULL,
+              device_id TEXT NOT NULL,
+              temperature FLOAT,
+              humidity FLOAT,
+              pressure FLOAT,
+              motion TEXT,
+              switch TEXT
+          );
+          
+          -- Convert to hypertable if it isn't already
+          SELECT create_hypertable('sensor_data', 'time', if_not_exists => TRUE);
+          
+          -- Create an index for faster device-specific queries if it doesn't exist
+          CREATE INDEX IF NOT EXISTS idx_sensor_data_device ON sensor_data(device_id, time DESC);
+          
+          -- Grant permissions
+          GRANT ALL PRIVILEGES ON TABLE sensor_data TO $POSTGRES_USER;
+          EOF
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_USER
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_DB

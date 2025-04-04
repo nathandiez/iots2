@@ -1,3 +1,4 @@
+# web backend app.py
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import psycopg2
@@ -50,24 +51,27 @@ def get_devices():
 @require_api_key
 def get_sensor_data():
     device_id = request.args.get('device_id')
-    hours = int(request.args.get('hours', 24))
-    
+    # Default to 1 hour if not specified, to fetch recent events including the test one
+    hours = int(request.args.get('hours', 1)) 
+
+    # <<< MODIFIED: Added event_type to SELECT list >>>
     query = """
-        SELECT time, device_id, temperature, humidity, pressure, motion, switch
+        SELECT time, device_id, event_type, temperature, humidity, pressure, motion, switch
         FROM sensor_data
         WHERE time > NOW() - interval '%s hours'
     """
     params = [hours]
-    
+
     if device_id:
         query += " AND device_id = %s"
         params.append(device_id)
-    
+
     query += " ORDER BY time DESC"
-    
+
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(query, params)
+            # This part dynamically gets column names, so it will include event_type
             columns = [desc[0] for desc in cur.description]
             results = []
             for row in cur.fetchall():

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# iot_service.py
 import paho.mqtt.client as mqtt
 import time
 import os
@@ -80,15 +81,39 @@ def get_db_connection():
             time.sleep(5)
 
 def store_sensor_data(data):
+    """Stores the complete sensor data dictionary into the database."""
     try:
+        # Ensure event_type exists, provide default if not (optional safety)
+        data.setdefault('event_type', 'unknown')
+
+        # Convert None to acceptable SQL values
+        for key in ("temperature", "humidity", "pressure"):
+            if data.get(key) is not None:
+                try:
+                    data[key] = float(data[key])
+                except Exception:
+                    logger.warning(f"Invalid float value for {key}: {data[key]}, setting to None")
+                    data[key] = None
+
         with db_conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO sensor_data (time, device_id, temperature, humidity, pressure, motion, switch)
-                VALUES (%(timestamp)s, %(device_id)s, %(temperature)s, %(humidity)s, %(pressure)s, %(motion)s, %(switch)s)
+                INSERT INTO sensor_data (
+                    time, device_id, event_type, temperature, humidity, pressure, motion, switch
+                )
+                VALUES (
+                    %(timestamp)s, %(device_id)s, %(event_type)s, %(temperature)s, %(humidity)s,
+                    %(pressure)s, %(motion)s, %(switch)s
+                )
             """, data)
             db_conn.commit()
-            logger.info(f"Stored sensor data for device {data['device_id']}")
-            DB_OPERATIONS.labels(operation='insert', status='success').inc()
+
+        logger.info(f"Stored {data['event_type']} data for device {data['device_id']}")
+        DB_OPERATIONS.labels(operation='insert', status='success').inc()
+
+    except KeyError as e:
+        logger.error(f"Missing key in sensor data dictionary: {e}")
+        DB_OPERATIONS.labels(operation='insert', status='failure').inc()
+
     except Exception as e:
         logger.error(f"Error storing sensor data: {e}")
         DB_OPERATIONS.labels(operation='insert', status='failure').inc()
@@ -110,9 +135,13 @@ def on_message(client, userdata, msg):
         MESSAGES_RECEIVED.labels(device_id=device_id).inc()
         
         # Update gauges with current values
-        TEMPERATURE.labels(device_id=device_id).set(data.get('temperature', 0))
-        HUMIDITY.labels(device_id=device_id).set(data.get('humidity', 0))
-        PRESSURE.labels(device_id=device_id).set(data.get('pressure', 0))
+        if data.get('temperature') is not None:
+            TEMPERATURE.labels(device_id=device_id).set(data['temperature'])
+        if data.get('humidity') is not None:
+            HUMIDITY.labels(device_id=device_id).set(data['humidity'])
+        if data.get('pressure') is not None:
+            PRESSURE.labels(device_id=device_id).set(data['pressure'])
+
         
         # Convert timestamp string to timezone-aware datetime in UTC
         eastern = pytz.timezone('America/New_York')

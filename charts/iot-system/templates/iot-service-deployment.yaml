@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: iotService
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
+    helm.sh/chart: {{ include "iot-system.chart" . }}
+spec:
+  replicas: {{ .Values.iotService.replicas }}
+  selector:
+    matchLabels:
+      app: iotService
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  template:
+    metadata:
+      labels:
+        app: iotService
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: {{ include "iot-system.name" . }}
+        # Optionally carry over any annotations if you want:
+        # annotations:
+        #   kubectl.kubernetes.io/restartedAt: "2025-03-19T05:41:26-04:00"
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: iot-service
+        image: "{{ .Values.iotService.image.repository }}:{{ .Values.iotService.image.tag }}"
+        imagePullPolicy: {{ .Values.iotService.image.pullPolicy }}
+        ports:
+        # Assuming default port 5000 if not specified in values.yaml for iotService
+        - containerPort: {{ .Values.iotService.port | default 5000 }}
+          protocol: TCP
+        resources:
+          requests:
+            cpu: {{ .Values.iotService.resources.requests.cpu | quote }}
+            memory: {{ .Values.iotService.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.iotService.resources.limits.cpu | quote }}
+            memory: {{ .Values.iotService.resources.limits.memory | quote }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        env:
+          - name: MQTT_BROKER
+            # Use internal service name
+            value: mosquitto.{{ .Release.Namespace }}.svc.cluster.local
+          - name: MQTT_USERNAME
+            # Use value from values.yaml
+            value: {{ .Values.mosquitto.credentials.iotServiceUsername | quote }}
+          - name: MQTT_PASSWORD
+            # Use value from values.yaml
+            value: {{ .Values.mosquitto.credentials.iotServicePassword | quote }}
+          - name: POSTGRES_HOST
+            value: timescaledb # Assumes service name is timescaledb
+          - name: POSTGRES_DB
+            valueFrom:
+              secretKeyRef:
+                name: db-credentials
+                key: POSTGRES_DB
+          - name: POSTGRES_USER
+            valueFrom:
+              secretKeyRef:
+                name: db-credentials
+                key: POSTGRES_USER
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: db-credentials
+                key: POSTGRES_PASSWORD
+          - name: API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: api-credentials
+                key: API_KEY
+        # --- MODIFIED SECTION START ---
+        volumeMounts:
+        # Mount the CA certificate file directly
+        - name: iot-ca-cert # Volume name
+          mountPath: /mosquitto/certs/ca.crt # Exact path expected by Python code
+          subPath: ca.crt # File name inside the mount, maps to the secret key 'ca.crt'
+          readOnly: true
+      # --- MODIFIED SECTION END ---
+      # --- MODIFIED SECTION START ---
+      volumes:
+      # Define the volume using the iot-ca secret
+      - name: iot-ca-cert
+        secret:
+          secretName: iot-ca # Secret created in init.sh containing ca.crt
+          items:
+          - key: ca.crt
+            path: ca.crt # Use the key 'ca.crt' from the secret for the subPath file
+          defaultMode: 420 # Read-only permissions
+      # --- MODIFIED SECTION END ---
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30

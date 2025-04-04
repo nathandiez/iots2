@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-pub
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: test-pub
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
+    helm.sh/chart: {{ include "iot-system.chart" . }}
+spec:
+  replicas: {{ .Values.testPub.replicas }}
+  selector:
+    matchLabels:
+      app: test-pub
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  template:
+    metadata:
+      labels:
+        app: test-pub
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: {{ include "iot-system.name" . }}
+        # If you want that restartedAt annotation, you can keep it:
+        # annotations:
+        #   kubectl.kubernetes.io/restartedAt: "2025-03-19T05:44:16-04:00"
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: test-pub
+        image: "{{ .Values.testPub.image.repository }}:{{ .Values.testPub.image.tag }}"
+        imagePullPolicy: {{ .Values.testPub.image.pullPolicy }}
+        env:
+          - name: MQTT_BROKER
+            # Note: Internal clients should use the internal service name
+            value: mosquitto.{{ .Release.Namespace }}.svc.cluster.local
+          - name: MQTT_USERNAME
+            # Using credentials from values.yaml - consider secrets later
+            value: {{ .Values.mosquitto.credentials.testPubUsername | quote }}
+          - name: MQTT_PASSWORD
+            # Using credentials from values.yaml - consider secrets later
+            value: {{ .Values.mosquitto.credentials.testPubPassword | quote }}
+        resources:
+          requests:
+            cpu: {{ .Values.testPub.resources.requests.cpu | quote }}
+            memory: {{ .Values.testPub.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.testPub.resources.limits.cpu | quote }}
+            memory: {{ .Values.testPub.resources.limits.memory | quote }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+        # --- MODIFIED SECTION START ---
+        volumeMounts:
+        # Mount the CA certificate file directly
+        - name: iot-ca-cert # Volume name
+          mountPath: /mosquitto/certs/ca.crt # Exact path expected by Python code
+          subPath: ca.crt # File name inside the mount, maps to the secret key 'ca.crt'
+          readOnly: true
+      # --- MODIFIED SECTION END ---
+      # --- MODIFIED SECTION START ---
+      volumes:
+      # Define the volume using the iot-ca secret
+      - name: iot-ca-cert
+        secret:
+          secretName: iot-ca # Secret created in init.sh containing ca.crt
+          items:
+          - key: ca.crt
+            path: ca.crt # Use the key 'ca.crt' from the secret for the subPath file
+          defaultMode: 420 # Read-only permissions
+      # --- MODIFIED SECTION END ---
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30

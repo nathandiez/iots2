@@ -2,54 +2,79 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web-backend
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "iot-system.labels" . | nindent 4 }}
     app: web-backend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
+    helm.sh/chart: {{ include "iot-system.chart" . }}
 spec:
   replicas: {{ .Values.webBackend.replicas }}
   selector:
     matchLabels:
       app: web-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
   template:
     metadata:
       labels:
         app: web-backend
-        {{- include "iot-system.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: {{ include "iot-system.name" . }}
+        # If you want that "kubectl.kubernetes.io/restartedAt" annotation:
+        # annotations:
+        #   kubectl.kubernetes.io/restartedAt: "2025-03-19T05:14:00-04:00"
     spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext:
-        runAsNonRoot: true
-        runAsUser: {{ .Values.webBackend.securityContext.runAsUser }}
         fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
       containers:
       - name: web-backend
         image: "{{ .Values.webBackend.image.repository }}:{{ .Values.webBackend.image.tag }}"
         imagePullPolicy: {{ .Values.webBackend.image.pullPolicy }}
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop:
-            - ALL
-          runAsNonRoot: true
-          runAsUser: {{ .Values.webBackend.securityContext.runAsUser }}
         ports:
         - containerPort: {{ .Values.webBackend.port }}
+          protocol: TCP
         livenessProbe:
           httpGet:
             path: /health
             port: {{ .Values.webBackend.port }}
+            scheme: HTTP
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
             port: {{ .Values.webBackend.port }}
+            scheme: HTTP
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: {{ .Values.webBackend.resources.requests.cpu | quote }}
+            memory: {{ .Values.webBackend.resources.requests.memory | quote }}
+          limits:
+            cpu: {{ .Values.webBackend.resources.limits.cpu | quote }}
+            memory: {{ .Values.webBackend.resources.limits.memory | quote }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
         env:
         - name: POSTGRES_DB
           valueFrom:
@@ -69,28 +94,13 @@ spec:
         - name: POSTGRES_HOST
           value: timescaledb
         - name: POSTGRES_PORT
-          value: "{{ .Values.timescaledb.port }}"
+          value: "5432"
         - name: API_KEY
           valueFrom:
             secretKeyRef:
               name: api-credentials
               key: API_KEY
-        resources:
-          {{- toYaml .Values.webBackend.resources | nindent 10 }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: web-backend
-  namespace: {{ .Values.namespace }}
-  labels:
-    {{- include "iot-system.labels" . | nindent 4 }}
-    app: web-backend
-spec:
-  selector:
-    app: web-backend
-  ports:
-    - protocol: TCP
-      port: {{ .Values.webBackend.port }}
-      targetPort: {{ .Values.webBackend.port }}
-  type: {{ .Values.webBackend.service.type }}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30

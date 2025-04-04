@@ -4,17 +4,10 @@ description: A Helm chart for IoT System with MQTT, TimescaleDB, and web interfa
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
-dependencies:
-  - name: prometheus
-    version: "~19.7.2"  # Use a stable version
-    repository: "https://prometheus-community.github.io/helm-charts"
-    condition: prometheus.enabled
-  - name: grafana
-    version: "~6.58.9"  # Use a stable version
-    repository: "https://grafana.github.io/helm-charts"
-    condition: grafana.enabled
 annotations:
   artifacthub.io/changes: |
     - Database credentials are now stored in Kubernetes secrets
     - Must provide postgres password during installation
     - All components now deployed through Helm charts
+    - Improved security with proper network policies
+    - Migrated from Traefik to GKE ingress controller

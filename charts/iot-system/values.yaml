@@ -1,114 +1,129 @@
+# values.yaml
 # Global configurations
 namespace: iot-system
 
-# Certificate configurations
-certificates:
-  mosquitto:
-    enabled: true
-    secretName: mosquitto-certs
-
 # Service account configuration
 serviceAccount:
-  name: iot-service-account
   create: true
+  name: iot-service-account
 
 # MQTT broker (Mosquitto) configuration
 mosquitto:
   image:
     repository: eclipse-mosquitto
-    tag: latest
+    tag: 2.0.18  # Using specific version instead of latest
     pullPolicy: IfNotPresent
-  ports:
-    - name: mqtt
-      port: 1883
-    - name: mqtts
-      port: 8883
-  config:
-    allowAnonymous: false
-    useTLS: true
-  credentials:
-    iotServicePassword: ""  # Leave empty for auto-generation 
-    testPubPassword: ""     # Leave empty for auto-generation
+  env:
+  - name: MOSQUITTO_ALLOW_ANONYMOUS
+    value: "false"
+  certificate:
+    organization: "IoT System"
   securityContext:
     runAsUser: 1000
     runAsNonRoot: true
   resources:
+    requests:
+      memory: "64Mi"
+      cpu: "25m"
     limits:
-      memory: "256Mi"
-      cpu: "200m"
+      memory: "128Mi"
+      cpu: "100m"
+  config:
+    allowAnonymous: false
+    requireClientCertificate: false
+  credentials:
+    iotServiceUsername: "iot_service"
+    iotServicePassword: "pw123"  # Replace for production
+    testPubUsername: "test_pub"
+    testPubPassword: "pw123"     # Replace for production
+  service:
+    type: LoadBalancer
+    annotations:
+      cloud.google.com/app-protocols: '{"mqtt":"TCP", "mqtts":"TCP"}'
 
 # IoT Service configuration
 iotService:
   image:
     repository: nathandiez12/iot-service
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicas: 1
   securityContext:
     runAsUser: 1000
     runAsNonRoot: true
   resources:
+    requests:
+      memory: "64Mi"
+      cpu: "25m"
     limits:
-      memory: "256Mi"
-      cpu: "200m"
+      memory: "128Mi"
+      cpu: "100m"
   port: 5000
-  # Metrics configuration
   metrics:
     enabled: true
     port: 8000
+    path: /metrics
 
 # Test publisher configuration
 testPub:
   image:
     repository: nathandiez12/test-pub
     tag: latest
-    pullPolicy: IfNotPresent
-  replicas: 1
+    pullPolicy: Always
+  replicas: 0
   securityContext:
     runAsUser: 1000
     runAsNonRoot: true
   resources:
+    requests:
+      memory: "32Mi"
+      cpu: "25m"
     limits:
-      memory: "128Mi"
-      cpu: "100m"
+      memory: "64Mi"
+      cpu: "50m"
 
 # TimescaleDB configuration
 timescaledb:
   image:
     repository: timescale/timescaledb
-    tag: latest-pg14
+    tag: 2.11.1-pg14  # Using specific version instead of latest
     pullPolicy: IfNotPresent
   securityContext:
     runAsUser: 70
     runAsNonRoot: true
   persistence:
-    enabled: false
-    size: 1Gi
+    enabled: false   # CHANGED: Disabled persistence
+    size: 10Gi
   resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
     limits:
-      memory: "512Mi"
-      cpu: "500m"
+      memory: "256Mi"
+      cpu: "200m"
   port: 5432
   database:
-    name: iotdb
-    user: iotuser
-    # Remove hardcoded password
-    existingSecret: db-credentials
+    name: iotdb    # UPDATED: Changed from iotdb to match api-db-secrets.yaml
+    user: iotuser  # UPDATED: Changed from iotuser to match api-db-secrets.yaml
+    password: "pw123"  # Replace for production
 
 # Web Backend configuration
 webBackend:
   image:
     repository: nathandiez12/web-backend
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicas: 1
   securityContext:
     runAsUser: 1000
     runAsNonRoot: true
   resources:
+    requests:
+      memory: "64Mi"
+      cpu: "25m"
     limits:
-      memory: "256Mi"
-      cpu: "200m"
+      memory: "128Mi"
+      cpu: "100m"
   port: 5000
   service:
     type: NodePort
@@ -118,19 +133,26 @@ webFrontend:
   image:
     repository: nathandiez12/web-frontend
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicas: 1
   securityContext:
     runAsUser: 1000
     runAsNonRoot: true
   resources:
+    requests:
+      memory: "64Mi"
+      cpu: "25m"
     limits:
-      memory: "256Mi"
-      cpu: "200m"
+      memory: "128Mi"
+      cpu: "100m"
   port: 3000
   service:
     type: NodePort
     port: 3000
+
+# API credentials
+apiCredentials:
+  apiKey: "V2Rvl3oopKZovBFElU83BhbwNqr6WaAd" # API key expected by the frontend
 
 # Network policy settings
 networkPolicy:
@@ -139,85 +161,10 @@ networkPolicy:
 # Ingress configuration
 ingress:
   enabled: true
-  className: nginx
-  host: your-iot-domain.local
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
+  useTLS: false # Set to false, cert-manager is failing, and TLS handled separately
+  className: gce
+  staticIpName: ""
+  host: iot.192.0.2.42.nip.io # Use your GKE cluster's external IP.
+  annotations: {}
 
-# Monitoring-specific configurations
-monitoring:
-  ingress:
-    enabled: true
-    className: nginx
-    annotations: {}
-    prometheus:
-      host: prometheus.iot-dashboard.local
-    grafana:
-      host: grafana.iot-dashboard.local
 
-# Prometheus configuration
-prometheus:
-  enabled: true  # Added this line
-  server:
-    service:
-      type: NodePort
-    persistentVolume:
-      enabled: true
-      size: 10Gi
-    config:
-      global:
-        scrape_interval: 15s
-        evaluation_interval: 15s
-      scrape_configs:
-        - job_name: 'prometheus'
-          static_configs:
-            - targets: ['localhost:9090']
-        - job_name: 'iot-service'
-          kubernetes_sd_configs:
-            - role: service
-              namespaces:
-                names:
-                  - iot-system
-          relabel_configs:
-            - source_labels: [__meta_kubernetes_service_label_prometheus]
-              regex: "true"
-              action: keep
-            - source_labels: [__meta_kubernetes_service_port_name]
-              regex: "metrics"
-              action: keep
-
-# Grafana configuration
-grafana:
-  enabled: true  # Added this line
-  service:
-    type: NodePort
-  persistence:
-    enabled: true
-    size: 5Gi
-  datasources:
-    datasources.yaml:
-      apiVersion: 1
-      datasources:
-      - name: Prometheus
-        type: prometheus
-        url: http://prometheus-server.iot-system.svc.cluster.local
-        access: proxy
-        isDefault: true
-  dashboardProviders:
-    dashboardproviders.yaml:
-      apiVersion: 1
-      providers:
-      - name: 'default'
-        orgId: 1
-        folder: ''
-        type: file
-        disableDeletion: false
-        editable: true
-        options:
-          path: /var/lib/grafana/dashboards/default
-  # Reference to external dashboard configuration file
-  dashboardFile: files/grafana-dashboard.json
-  ingress:
-    enabled: true
-    hosts:
-      - grafana.iot-dashboard.local

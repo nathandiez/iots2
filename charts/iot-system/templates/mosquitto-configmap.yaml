@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "iot-system.name" . }}
+data:
+  mosquitto.conf: |
+    # MQTT broker configuration
+    allow_anonymous false
+    password_file /mosquitto/passwd/mosquitto_passwd
+    listener 1883
+    
+    # TLS configuration
+    listener 8883
+    certfile /mosquitto/certs/tls.crt
+    keyfile /mosquitto/certs/tls.key
+    cafile /mosquitto/certs/ca.crt
+    require_certificate false
+    use_identity_as_username false

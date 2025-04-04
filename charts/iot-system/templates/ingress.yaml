@@ -1,26 +1,20 @@
-# templates/ingress.yaml
-{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: iot-app-ingress
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/hsts: "true"
-    nginx.ingress.kubernetes.io/hsts-max-age: "31536000"
-    nginx.ingress.kubernetes.io/hsts-include-subdomains: "true"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    {{- with .Values.ingress.annotations }}
-    {{- toYaml . | nindent 4 }}
+    meta.helm.sh/release-name: {{ .Release.Name }}
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    {{- if .Values.ingress.staticIpName }}
+    kubernetes.io/ingress.global-static-ip-name: {{ .Values.ingress.staticIpName }}
     {{- end }}
+    kubernetes.io/ingress.class: "gce"
 spec:
-  ingressClassName: {{ .Values.ingress.className }}
-  tls:
-  - hosts:
-    - {{ .Values.ingress.host }}
-    secretName: iot-tls-cert
+  ingressClassName: gce
   rules:
   - host: {{ .Values.ingress.host }}
     http:
@@ -31,12 +25,17 @@ spec:
           service:
             name: web-backend
             port:
-              number: {{ .Values.webBackend.port }}
+              number: 5000
       - path: /
         pathType: Prefix
         backend:
           service:
             name: web-frontend
             port:
-              number: {{ .Values.webFrontend.service.port }}
-{{- end }}
+              number: 3000
+  {{- if .Values.ingress.useTLS }}
+  tls:
+  - hosts:
+      - {{ .Values.ingress.host }}
+    secretName: iot-tls-cert
+  {{- end }}
