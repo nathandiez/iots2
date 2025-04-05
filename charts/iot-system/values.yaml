@@ -44,7 +44,7 @@ mosquitto:
 # IoT Service configuration
 iotService:
   image:
-    repository: raraid/iot-service
+    repository: nathandiez12/iot-service
     tag: latest
     pullPolicy: Always
   replicas: 1
@@ -67,7 +67,7 @@ iotService:
 # Test publisher configuration
 testPub:
   image:
-    repository: raraid/test-pub
+    repository: nathandiez12/test-pub
     tag: latest
     pullPolicy: Always
   replicas: 0
@@ -110,7 +110,7 @@ timescaledb:
 # Web Backend configuration
 webBackend:
   image:
-    repository: raraid/web-backend
+    repository: nathandiez12/web-backend
     tag: latest
     pullPolicy: Always
   replicas: 1
@@ -131,7 +131,7 @@ webBackend:
 # Web Frontend configuration
 webFrontend:
   image:
-    repository: raraid/web-frontend
+    repository: nathandiez12/web-frontend
     tag: latest
     pullPolicy: Always
   replicas: 1

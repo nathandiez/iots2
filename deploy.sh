@@ -28,10 +28,10 @@ HOST_VALUE="iot.${INGRESS_IP}.nip.io"
 echo "==> Using host: ${HOST_VALUE}"
 
 echo "==> Pulling Docker images with tag ${IMAGE_TAG}..."
-docker pull raraid/web-frontend:${IMAGE_TAG}
-docker pull raraid/web-backend:${IMAGE_TAG}
-docker pull raraid/iot-service:${IMAGE_TAG}
-docker pull raraid/test-pub:${IMAGE_TAG}
+docker pull nathandiez12/web-frontend:${IMAGE_TAG}
+docker pull nathandiez12/web-backend:${IMAGE_TAG}
+docker pull nathandiez12/iot-service:${IMAGE_TAG}
+docker pull nathandiez12/test-pub:${IMAGE_TAG}
 docker pull eclipse-mosquitto:2.0.18
 echo "==> All images pulled successfully"
 

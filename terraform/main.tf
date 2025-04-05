@@ -21,7 +21,7 @@ resource "azurerm_resource_group" "rg" {
 
 # Define the Azure Container Registry (ACR)
 resource "azurerm_container_registry" "acr" {
-  name                = "ericiots2040525" # Ensure this is your chosen unique name
+  name                = "nathaniots2040525" # Ensure this is your chosen unique name
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   sku                 = "Basic"

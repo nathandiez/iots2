@@ -60,6 +60,8 @@ helm repo add jetstack https://charts.jetstack.io && helm repo update
 az login --use-device-code
 ```
 
+# setup project on local vm
+
 ---
 ## 3. Infrastructure Deployment with Terraform
 ```bash
