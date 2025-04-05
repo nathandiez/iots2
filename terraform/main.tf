@@ -1,126 +1,111 @@
-# main.tf
-
 terraform {
   required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = ">= 6.14.0, < 7.0.0"
-    }
-    null = {
-      source  = "hashicorp/null"
-      version = "~> 3.0"
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0" # Using version 3.117.1 based on init output
     }
   }
-  required_version = ">= 1.0.0"
+  required_version = ">= 1.1.0" # Terraform 1.11.3 meets this
 }
 
-# Set the GCP project, region, and zone
-provider "google" {
-  project = var.project_id
-  region  = var.region
-  zone    = var.zone
+provider "azurerm" {
+  features {}
+  # Assumes you are logged in via Azure CLI ('az login')
 }
 
-data "google_client_config" "default" {}
-
-resource "google_compute_network" "vpc" {
-  name                    = "${var.project_name}-vpc"
-  auto_create_subnetworks = false
+# Define the Azure Resource Group
+resource "azurerm_resource_group" "rg" {
+  name     = "rg-iotsystem-port"
+  location = "eastus" # Ensure this is your desired region
 }
 
-resource "google_compute_subnetwork" "subnet" {
-  name          = "${var.project_name}-subnet"
-  region        = var.region
-  network       = google_compute_network.vpc.name
-  ip_cidr_range = "10.0.0.0/16"
-  
-  secondary_ip_range {
-    range_name    = "pod-range"
-    ip_cidr_range = "10.1.0.0/16"
+# Define the Azure Container Registry (ACR)
+resource "azurerm_container_registry" "acr" {
+  name                = "ericiots2040525" # Ensure this is your chosen unique name
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  sku                 = "Basic"
+  admin_enabled       = true
+}
+
+# Virtual Network (VNet) for AKS
+resource "azurerm_virtual_network" "vnet" {
+  name                = "vnet-iotsystem"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+# Subnet specifically for AKS Nodes within the VNet
+resource "azurerm_subnet" "aks_subnet" {
+  name                 = "snet-aks"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.vnet.name
+  address_prefixes     = ["10.0.1.0/24"]
+}
+
+# Public IP Address for Kubernetes Ingress
+resource "azurerm_public_ip" "ingress_pip" {
+  name                = "pip-aks-ingress"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+# Azure Kubernetes Service (AKS) Cluster
+resource "azurerm_kubernetes_cluster" "aks" {
+  name                = "aks-iotsystem-cluster"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  dns_prefix          = "aks-iotsystem"
+
+  default_node_pool {
+    name            = "default"
+    node_count      = 3
+    vm_size         = "Standard_B2s" # Adjust if desired
+    os_disk_size_gb = 30
+    vnet_subnet_id  = azurerm_subnet.aks_subnet.id
   }
-  
-  secondary_ip_range {
-    range_name    = "service-range"
-    ip_cidr_range = "10.2.0.0/16"
+
+  identity {
+    type = "SystemAssigned"
   }
-}
-# Create Cloud Router for NAT
-resource "google_compute_router" "router" {
-  name    = "${var.project_name}-nat-router"
-  region  = var.region
-  network = google_compute_network.vpc.name
-}
 
-# Configure Cloud NAT
-resource "google_compute_router_nat" "nat" {
-  name                               = "${var.project_name}-nat-config"
-  router                             = google_compute_router.router.name
-  region                             = var.region
-  nat_ip_allocate_option             = "AUTO_ONLY"
-  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
-}
-
-# Reserve a static external IP for ingress
-resource "google_compute_global_address" "ingress_ip" {
-  name = "${var.project_name}-ingress-ip"
-}
-
-module "gke" {
-  source                     = "terraform-google-modules/kubernetes-engine/google"
-  project_id                 = var.project_id
-  name                       = "${var.project_name}-cluster"
-  regional                   = false
-  region                     = var.region
-  zones                      = [var.zone]
-  network                    = google_compute_network.vpc.name
-  subnetwork                 = google_compute_subnetwork.subnet.name
-  ip_range_pods              = "pod-range"
-  ip_range_services          = "service-range"
-  http_load_balancing        = true
-  network_policy             = true
-  remove_default_node_pool   = true
-  deletion_protection        = false
-  
-  node_pools = [
-    {
-      name               = "default-node-pool"
-      machine_type       = "e2-medium"
-      node_locations     = var.zone
-      min_count          = 3
-      max_count          = 3
-      disk_size_gb       = 30
-      disk_type          = "pd-standard"
-      image_type         = "COS_CONTAINERD"
-      auto_repair        = true
-      auto_upgrade       = true
-      initial_node_count = 3
-    }
-  ]
-}
-
-# Configure kubectl to connect to the new cluster
-resource "null_resource" "configure_kubectl" {
-  depends_on = [module.gke]
-
-  provisioner "local-exec" {
-    command = "gcloud container clusters get-credentials ${var.project_name}-cluster --zone ${var.zone} --project ${var.project_id}"
+  # --- CORRECTED SECTION: Added network_profile ---
+  network_profile {
+    network_plugin     = "kubenet"
+    service_cidr       = "10.240.0.0/16"  # Non-overlapping range for K8s services
+    dns_service_ip     = "10.240.0.10"   # IP within service_cidr for K8s DNS
+    docker_bridge_cidr = "172.17.0.1/16"  # Default bridge CIDR
   }
+  # --- END OF CORRECTION ---
+
+  role_based_access_control_enabled = true
 }
 
-# Deploy cert-manager and other resources using init.sh script
-resource "null_resource" "deploy_iot_resources" {
-  depends_on = [null_resource.configure_kubectl]
+# --- Outputs ---
 
-  provisioner "local-exec" {
-    command = "cd .. && ./init.sh"
-  }
+output "acr_login_server" {
+  value = azurerm_container_registry.acr.login_server
 }
 
-# Deploy the IoT application using deploy.sh script
-resource "null_resource" "deploy_iot_app" {
-  depends_on = [null_resource.deploy_iot_resources, google_compute_global_address.ingress_ip]
+output "acr_name" {
+   value = azurerm_container_registry.acr.name
+}
 
-  provisioner "local-exec" {
-    command = "cd .. && INGRESS_IP=${google_compute_global_address.ingress_ip.address} ./deploy.sh"
-  }
+output "aks_cluster_name" {
+  value = azurerm_kubernetes_cluster.aks.name
+}
+
+output "aks_cluster_id" {
+  value = azurerm_kubernetes_cluster.aks.id
+}
+
+output "ingress_public_ip" {
+   value = azurerm_public_ip.ingress_pip.ip_address
+}
+
+output "aks_node_resource_group" {
+  value = azurerm_kubernetes_cluster.aks.node_resource_group
 }

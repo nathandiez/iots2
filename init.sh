@@ -1,12 +1,12 @@
 #!/bin/bash
-# init.sh - Initialize GKE environment for IoT System
+# init.sh - Initialize AKS environment for IoT System
 set -euo pipefail
 
 echo " "
 echo "=========================================================================="
-echo "==> Running init.sh - starting initialization of IoT system environment..."
+echo "==> Running init.sh - starting initialization of IoT system environment for AKS..."
 
-# Check if cert-manager is installed (improved check)
+# Check if cert-manager is installed
 echo "==> Checking if cert-manager is installed..."
 if ! kubectl get deployment -n cert-manager cert-manager > /dev/null 2>&1; then
   echo "Installing cert-manager..."
@@ -35,13 +35,13 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: nathandiez12@gmail.com
+    email: ericdiez99@gmail.com
     privateKeySecretRef:
       name: letsencrypt-prod-key
     solvers:
     - http01:
         ingress:
-          class: gce
+          class: nginx
 EOF
 
 kubectl apply -f - <<EOF
@@ -100,7 +100,19 @@ kubectl create secret generic mosquitto-credentials \
 # Clean up local file
 rm mosquitto_passwd
 echo "==> Mosquitto credentials created successfully"
-echo "==> GKE initialization complete!"
+
+# Verify Azure IP configuration
+echo "==> Verifying Azure ingress controller configuration..."
+INGRESS_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+if [ -z "$INGRESS_IP" ]; then
+  echo "WARNING: Ingress controller doesn't have an external IP assigned yet."
+  echo "         Check service with: kubectl get svc -n ingress-nginx ingress-nginx-controller"
+else
+  echo "==> Ingress controller external IP: $INGRESS_IP"
+  echo "==> Your application will be available at: http://iot.$INGRESS_IP.nip.io"
+fi
+
+echo "==> AKS initialization complete!"
 cd terraform
 terraform output
 cd ..

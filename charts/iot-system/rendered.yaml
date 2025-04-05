@@ -225,7 +225,7 @@ spec:
             secretKeyRef:
               key: API_KEY
               name: api-credentials
-        image: nathandiez12/iot-service:latest
+        image: raraid/iot-service:latest
         imagePullPolicy: IfNotPresent
         name: iot-service
         ports:
@@ -426,7 +426,7 @@ spec:
           value: test_pub
         - name: MQTT_PASSWORD
           value: pw123
-        image: nathandiez12/test-pub:latest
+        image: raraid/test-pub:latest
         imagePullPolicy: IfNotPresent
         name: test-pub
         resources:
@@ -588,7 +588,7 @@ spec:
             secretKeyRef:
               key: API_KEY
               name: api-credentials
-        image: nathandiez12/web-backend:latest
+        image: raraid/web-backend:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -682,7 +682,7 @@ spec:
       - env:
         - name: REACT_APP_API_URL
           value: /api
-        image: nathandiez12/web-frontend:latest
+        image: raraid/web-frontend:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3

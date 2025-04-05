@@ -44,7 +44,7 @@ mosquitto:
 # IoT Service configuration
 iotService:
   image:
-    repository: nathandiez12/iot-service
+    repository: raraid/iot-service
     tag: latest
     pullPolicy: Always
   replicas: 1
@@ -67,7 +67,7 @@ iotService:
 # Test publisher configuration
 testPub:
   image:
-    repository: nathandiez12/test-pub
+    repository: raraid/test-pub
     tag: latest
     pullPolicy: Always
   replicas: 0
@@ -110,7 +110,7 @@ timescaledb:
 # Web Backend configuration
 webBackend:
   image:
-    repository: nathandiez12/web-backend
+    repository: raraid/web-backend
     tag: latest
     pullPolicy: Always
   replicas: 1
@@ -131,7 +131,7 @@ webBackend:
 # Web Frontend configuration
 webFrontend:
   image:
-    repository: nathandiez12/web-frontend
+    repository: raraid/web-frontend
     tag: latest
     pullPolicy: Always
   replicas: 1
@@ -162,9 +162,8 @@ networkPolicy:
 ingress:
   enabled: true
   useTLS: false # Set to false, cert-manager is failing, and TLS handled separately
-  className: gce
-  staticIpName: ""
-  host: iot.34.111.177.125.nip.io # Use your GKE cluster's external IP.
+  className: nginx
+  host: iot.52.170.2.81.nip.io  # Using your Azure public IP
   annotations: {}
 
 
