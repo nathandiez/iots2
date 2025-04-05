@@ -19,7 +19,7 @@ export DOCKER_DEFAULT_PLATFORM=linux/amd64
 # Ideally, get this from terraform output or configuration
 INGRESS_STATIC_IP_NAME="iot-system-ingress-ip"
 # Replace with your actual static IP address
-INGRESS_STATIC_IP_VALUE="34.49.44.100" 
+INGRESS_STATIC_IP_VALUE="34.111.177.125" 
 HOST_VALUE="iot.${INGRESS_STATIC_IP_VALUE}.nip.io"
 # ---
 

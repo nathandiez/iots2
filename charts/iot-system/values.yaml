@@ -164,7 +164,7 @@ ingress:
   useTLS: false # Set to false, cert-manager is failing, and TLS handled separately
   className: gce
   staticIpName: ""
-  host: iot.192.0.2.42.nip.io # Use your GKE cluster's external IP.
+  host: iot.34.111.177.125.nip.io # Use your GKE cluster's external IP.
   annotations: {}
 
 
