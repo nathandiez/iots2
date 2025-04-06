@@ -107,7 +107,7 @@ helm install ingress-nginx ingress-nginx/ingress-nginx \
   --create-namespace \
   --namespace ingress-nginx \
   --set controller.service.loadBalancerIP="$INGRESS_IP" \
-  --set controller.service.externalTrafficPolicy=Local \   # ← AKS health‑probe fix
+  --set controller.service.externalTrafficPolicy=Local \   
   --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"=/healthz \
   --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-resource-group"=rg-iotsystem-port
 
